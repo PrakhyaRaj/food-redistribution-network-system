@@ -18,10 +18,12 @@ def create_app():
     from routes.user_routes import user_bp
     from routes.food_routes import food_bp
     from routes.transaction_routes import transaction_bp
+    from routes.request_routes import request_bp
 
     app.register_blueprint(user_bp)
     app.register_blueprint(food_bp)
     app.register_blueprint(transaction_bp)
+    app.register_blueprint(request_bp)
 
     return app
 

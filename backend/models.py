@@ -33,7 +33,7 @@ user_roles = db.Table(
 class User(db.Model):
     __tablename__ = "users"
 
-    user_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
@@ -94,7 +94,7 @@ class Role(db.Model):
 class FoodItem(db.Model):
     __tablename__ = "food_items"
 
-    food_id = db.Column(db.Integer, primary_key=True)
+    food_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     donor_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
@@ -116,7 +116,7 @@ class FoodItem(db.Model):
 class Request(db.Model):
     __tablename__ = "requests"
 
-    request_id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     receiver_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
     food_type = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
@@ -139,7 +139,7 @@ class Request(db.Model):
 class Transaction(db.Model):
     __tablename__ = "transactions"
 
-    txn_id = db.Column(db.Integer, primary_key=True)
+    txn_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     donor_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
     receiver_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
     food_id = db.Column(db.Integer, db.ForeignKey("food_items.food_id"), nullable=False)

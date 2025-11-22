@@ -2,13 +2,14 @@
 
 from flask import Blueprint, request, jsonify
 from app import db
+from datetime import datetime, timezone
 from models import Transaction, FoodItem, User
 from datetime import datetime
 
-transaction_bp = Blueprint("transaction_bp", __name__)
+transaction_bp = Blueprint("transaction_bp", __name__, url_prefix="/transactions")
 
-# 🟢 1. Create a new transaction (Receiver claims a food item)
-@transaction_bp.route("/transactions", methods=["POST"])
+# create new transaction
+@transaction_bp.route("/create", methods=["POST"])
 def create_transaction():
     data = request.get_json()
 
@@ -33,7 +34,7 @@ def create_transaction():
         donor_id=donor_id,
         receiver_id=receiver_id,
         food_id=food_id,
-        date=datetime.utcnow(),
+        date=datetime.now(timezone.utc),
         status="claimed"
     )
 
@@ -50,7 +51,7 @@ def create_transaction():
 
 
 # 🟡 2. Get all transactions
-@transaction_bp.route("/transactions", methods=["GET"])
+@transaction_bp.route("/all", methods=["GET"])
 def get_all_transactions():
     transactions = Transaction.query.all()
 
@@ -70,7 +71,7 @@ def get_all_transactions():
 
 
 # 🔵 3. Get transactions for a specific user (donor or receiver)
-@transaction_bp.route("/transactions/user/<int:user_id>", methods=["GET"])
+@transaction_bp.route("/user/<int:user_id>", methods=["GET"])
 def get_user_transactions(user_id):
     transactions = Transaction.query.filter(
         (Transaction.donor_id == user_id) | (Transaction.receiver_id == user_id)
@@ -95,7 +96,7 @@ def get_user_transactions(user_id):
 
 
 # 🔴 4. Update transaction status (optional)
-@transaction_bp.route("/transactions/<int:txn_id>", methods=["PUT"])
+@transaction_bp.route("/update/<int:txn_id>", methods=["PUT"])
 def update_transaction_status(txn_id):
     data = request.get_json()
     new_status = data.get("status")
