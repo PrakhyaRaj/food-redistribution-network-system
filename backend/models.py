@@ -1,7 +1,9 @@
-from app import db
+# backend/models.py
+from backend.extensions import db #from extensions import db  # CHANGED: Import from extensions instead of app
 from datetime import datetime, timezone
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy import Enum
+from werkzeug.security import generate_password_hash, check_password_hash
 
 roles_enum = Enum('donor', 'receiver', 'admin', name='role_enum')
 status_enum = Enum('available', 'expired', 'reserved', 'collected')
@@ -36,7 +38,7 @@ class User(db.Model):
     user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
+    password = db.Column(db.String(255), nullable=False) 
     phone = db.Column(db.String(15))
     location_lat = db.Column(db.Float)
     location_long = db.Column(db.Float)
@@ -44,12 +46,11 @@ class User(db.Model):
 
     # MANY-TO-MANY ROLE RELATION
     roles = db.relationship(
-    "Role",
-    secondary=user_roles,
-    back_populates="users",
-    lazy=True
+        "Role",
+        secondary=user_roles,
+        back_populates="users",
+        lazy=True
     )
-
 
     # Existing relationships
     foods = db.relationship("FoodItem", back_populates="donor", lazy=True)
@@ -67,13 +68,41 @@ class User(db.Model):
         lazy=True
     )
 
+    # === CHANGED: helper methods for roles and serialization ===
+    def set_password(self, password):
+        from werkzeug.security import generate_password_hash
+        self.password = generate_password_hash(password)  # Store in 'password' column
+    
+    def check_password(self, password):
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password, password)  # Check 'password' column
+    
+    def roles_list(self):
+        """Return list of role names for the user."""
+        # Role stores column 'role_name' below; use that to return strings consistently.
+        return [r.role_name for r in self.roles]
+
+    def has_role(self, role_name):
+        """Return True if user has role with name role_name."""
+        return role_name in self.roles_list()
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "name": self.name,
+            "email": self.email,
+            "phone": self.phone,  
+            "location_lat": self.location_lat,
+            "location_long": self.location_long,
+            "roles": self.roles_list()
+        }
+    
     def __repr__(self):
         return f"<User {self.name}>"
 
 # ============================================================
 # ROLES TABLE
 # ============================================================
-
 class Role(db.Model):
     __tablename__ = "roles"
 
@@ -82,10 +111,15 @@ class Role(db.Model):
 
     # Relationship back to users through association table
     users = db.relationship(
-    "User",
-    secondary="user_roles",
-    back_populates="roles"
-)
+        "User",
+        secondary="user_roles",
+        back_populates="roles"
+    )
+
+    # === CHANGED: convenience property so code can use role.name uniformly ===
+    @property
+    def name(self):
+        return self.role_name
 
 
 # ============================================================

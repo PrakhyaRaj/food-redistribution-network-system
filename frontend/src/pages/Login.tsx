@@ -65,6 +65,8 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
+                autoComplete="current-password" 
               />
             </div>
           </CardContent>

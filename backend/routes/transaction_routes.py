@@ -1,15 +1,18 @@
 # backend/routes/transaction_routes.py
 
 from flask import Blueprint, request, jsonify
-from app import db
 from datetime import datetime, timezone
-from models import Transaction, FoodItem, User
+from backend.models import db, Transaction, FoodItem, User
 from datetime import datetime
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from backend.auth import roles_required 
 
 transaction_bp = Blueprint("transaction_bp", __name__, url_prefix="/transactions")
 
 # create new transaction
 @transaction_bp.route("/create", methods=["POST"])
+@jwt_required()  # ADD JWT
+@roles_required('donor') 
 def create_transaction():
     data = request.get_json()
 
@@ -52,6 +55,8 @@ def create_transaction():
 
 # 🟡 2. Get all transactions
 @transaction_bp.route("/all", methods=["GET"])
+@jwt_required()
+@roles_required('donor', 'receiver')
 def get_all_transactions():
     transactions = Transaction.query.all()
 
@@ -62,8 +67,8 @@ def get_all_transactions():
             "donor_id": txn.donor_id,
             "receiver_id": txn.receiver_id,
             "food_id": txn.food_id,
-            "food_name": txn.food.food_name if txn.food else None,
-            "date": txn.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "food_name": txn.food.name if txn.food else None,
+            "date": txn.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "status": txn.status
         })
 
@@ -72,6 +77,8 @@ def get_all_transactions():
 
 # 🔵 3. Get transactions for a specific user (donor or receiver)
 @transaction_bp.route("/user/<int:user_id>", methods=["GET"])
+@jwt_required()
+@roles_required('donor', 'receiver')
 def get_user_transactions(user_id):
     transactions = Transaction.query.filter(
         (Transaction.donor_id == user_id) | (Transaction.receiver_id == user_id)
@@ -87,8 +94,8 @@ def get_user_transactions(user_id):
             "donor_id": txn.donor_id,
             "receiver_id": txn.receiver_id,
             "food_id": txn.food_id,
-            "food_name": txn.food.food_name if txn.food else None,
-            "date": txn.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "food_name": txn.food.name if txn.food else None,
+            "date": txn.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "status": txn.status
         })
 
@@ -97,6 +104,8 @@ def get_user_transactions(user_id):
 
 # 🔴 4. Update transaction status (optional)
 @transaction_bp.route("/update/<int:txn_id>", methods=["PUT"])
+@jwt_required()  # ADD JWT
+@roles_required('donor', 'receiver')
 def update_transaction_status(txn_id):
     data = request.get_json()
     new_status = data.get("status")

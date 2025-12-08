@@ -38,12 +38,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     try {
       const response = await api.auth.login(email, password);
-      localStorage.setItem("user_id", response.user_id.toString());
-      localStorage.setItem("roles", JSON.stringify(response.roles));
-      setUserId(response.user_id.toString());
-      setRoles(response.roles);
-      toast.success("Login successful!");
-      navigate("/dashboard");
+    
+      // ADD A SMALL DELAY to ensure token is stored
+      await new Promise(resolve => setTimeout(resolve, 100));
+    
+      // Check if token was actually stored
+      const token = localStorage.getItem("token");
+      console.log("🔍 Token after login:", token ? "Stored" : "Missing");
+    
+      if (token) {
+        localStorage.setItem("user_id", response.user_id.toString());
+        localStorage.setItem("roles", JSON.stringify(response.roles));
+        setUserId(response.user_id.toString());
+        setRoles(response.roles);
+        toast.success("Login successful!");
+        navigate("/dashboard");
+      } else {
+        throw new Error("Token not stored after login");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Login failed");
       throw error;
@@ -64,6 +76,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     localStorage.removeItem("user_id");
     localStorage.removeItem("roles");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setUserId(null);
     setRoles([]);
     toast.success("Logged out successfully");

@@ -107,6 +107,7 @@ const Register = () => {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
+                autoComplete="new-password"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">

@@ -15,6 +15,7 @@ import MyRequests from "./pages/MyRequests";
 import Transactions from "./pages/Transactions";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
+import NotificationHandler from "@/components/NotificationHandler"; 
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <NotificationHandler />
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Login />} />
