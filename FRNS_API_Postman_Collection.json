@@ -1,0 +1,275 @@
+{
+  "info": {
+    "_postman_id": "frns-collection",
+    "name": "FRNS API - Food Redistribution Network",
+    "description": "Complete API collection with authentication setup",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "1. Register User (GET TOKEN)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                  "    pm.environment.set(\"user_id\", jsonData.user_id);",
+                  "    console.log('✅ Token saved to environment! user_id: ' + jsonData.user_id);",
+                  "} else {",
+                  "    console.log('❌ Registration failed');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"test@example.com\",\"password\": \"Test@1234\",\"name\": \"Test User\",\"phone\": \"1234567890\",\"location_lat\": 40.7128,\"location_long\": -74.0060,\"roles\": [\"receiver\"]}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Creates a test user and automatically saves the access token to the environment.\n\n✅ Run this first to get your token!"
+          }
+        },
+        {
+          "name": "Test Auth (Verify Token Works)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/test-auth",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "test-auth"]
+            },
+            "description": "Verifies that your JWT token is valid and working."
+          }
+        },
+        {
+          "name": "API Status (No Token Needed)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "status"]
+            },
+            "description": "Check if API is running (no authentication required)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "Get All Transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/transactions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "transactions"]
+            },
+            "description": "Retrieve all transactions for the current user"
+          }
+        },
+        {
+          "name": "Get Specific Transaction",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/transactions/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "transactions", "1"]
+            },
+            "description": "Get details of a specific transaction (replace 1 with actual transaction ID)"
+          }
+        },
+        {
+          "name": "Update Transaction Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"status\": \"completed\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/transactions/1/update-status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "transactions", "1", "update-status"]
+            },
+            "description": "Update the status of a transaction"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Route Optimizations",
+      "item": [
+        {
+          "name": "Get Route Optimization",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/route-optimizations/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "route-optimizations", "1"]
+            },
+            "description": "Get cached route optimization data for a request"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Feedback & Ratings",
+      "item": [
+        {
+          "name": "Get User Feedback",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/feedback/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "feedback", "user", "{{user_id}}"]
+            },
+            "description": "Get all feedback for a user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get User Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/notifications/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "notifications", "{{user_id}}"]
+            },
+            "description": "Get all notifications for the current user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Activity Log",
+      "item": [
+        {
+          "name": "Get User Activities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/mongodb/activities/{{user_id}}?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mongodb", "activities", "{{user_id}}"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Get activity log for the user"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api, testToken } from "@/lib/api";
 import { toast } from "sonner";
 
 interface AuthContextType {
@@ -31,26 +31,61 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [roles, setRoles] = useState<string[]>(
     JSON.parse(localStorage.getItem("roles") || "[]")
   );
+
   const navigate = useNavigate();
+
+  // Sync roles from server on mount and periodically
+  useEffect(() => {
+    const syncRoles = async () => {
+      const token = localStorage.getItem("token");
+      const storedUserId = localStorage.getItem("user_id");
+      
+      if (!token || !storedUserId) return;
+      
+      try {
+        const res = await testToken();
+        if (res?.success && Array.isArray(res.roles)) {
+          console.log("🔄 Syncing roles from server:", res.roles);
+          localStorage.setItem("roles", JSON.stringify(res.roles));
+          setRoles(res.roles);
+        }
+      } catch (error) {
+        console.log("⚠️ Role sync failed (user may not be logged in)");
+      }
+    };
+
+    syncRoles();
+    
+    // Sync roles every 30 seconds while user is logged in
+    const interval = setInterval(() => {
+      if (localStorage.getItem("token")) {
+        syncRoles();
+      }
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const isAuthenticated = !!userId;
 
   const login = async (email: string, password: string) => {
     try {
       const response = await api.auth.login(email, password);
-    
-      // ADD A SMALL DELAY to ensure token is stored
+
       await new Promise(resolve => setTimeout(resolve, 100));
-    
-      // Check if token was actually stored
+
       const token = localStorage.getItem("token");
       console.log("🔍 Token after login:", token ? "Stored" : "Missing");
-    
+
       if (token) {
         localStorage.setItem("user_id", response.user_id.toString());
         localStorage.setItem("roles", JSON.stringify(response.roles));
-        setUserId(response.user_id.toString());
+        (response.user_id.toString());
         setRoles(response.roles);
+
+        // 🔧 Wait for state update to propagate
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         toast.success("Login successful!");
         navigate("/dashboard");
       } else {
@@ -61,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       throw error;
     }
   };
-
+  
   const register = async (data: RegisterData) => {
     try {
       await api.auth.register(data);

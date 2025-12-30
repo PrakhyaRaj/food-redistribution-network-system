@@ -178,6 +178,8 @@ class Transaction(db.Model):
     receiver_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
     food_id = db.Column(db.Integer, db.ForeignKey("food_items.food_id"), nullable=False)
     request_id = db.Column(db.Integer, db.ForeignKey("requests.request_id"), nullable=True)
+    quantity = db.Column(db.Integer, nullable=True)  # Quantity of food in this transaction
+    pickup_date = db.Column(db.DateTime, nullable=True)  # Scheduled or actual pickup date
     status = db.Column(txn_status_enum, default="initiated", nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
@@ -190,3 +192,37 @@ class Transaction(db.Model):
 
     def __repr__(self):
         return f"<Transaction {self.txn_id} ({self.status})>"
+
+
+# ============================================================
+# NOTIFICATIONS TABLE
+# ============================================================
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    notification_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)
+    notification_type = db.Column(db.String(50), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    data = db.Column(db.JSON, nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship("User", backref="notifications")
+
+    def to_dict(self):
+        return {
+            "notification_id": self.notification_id,
+            "user_id": self.user_id,
+            "notification_type": self.notification_type,
+            "title": self.title,
+            "message": self.message,
+            "data": self.data,
+            "is_read": self.is_read,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
+
+    def __repr__(self):
+        return f"<Notification {self.notification_id} - {self.notification_type}>"

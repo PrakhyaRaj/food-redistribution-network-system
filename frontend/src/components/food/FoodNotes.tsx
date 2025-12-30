@@ -33,6 +33,14 @@ export const FoodNotes: React.FC<FoodNotesProps> = ({ foodId }) => {
   const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Quick-pick common notes for faster entry
+  const commonNotes = [
+    { label: "Contains nuts", type: "allergy", priority: "high" as const, text: "Contains nuts" },
+    { label: "Spicy food", type: "handling", priority: "medium" as const, text: "Spicy food" },
+    { label: "Keep refrigerated", type: "storage", priority: "high" as const, text: "Keep refrigerated" },
+    { label: "Cooked today at 2 PM", type: "quality", priority: "medium" as const, text: "Cooked today at 2 PM" },
+  ];
+
   useEffect(() => {
     loadNotes();
   }, [foodId]);
@@ -130,6 +138,22 @@ export const FoodNotes: React.FC<FoodNotesProps> = ({ foodId }) => {
             onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
             rows={3}
           />
+
+          {/* Quick add chips for common notes */}
+          <div className="flex flex-wrap gap-2 text-xs">
+            {commonNotes.map((n, idx) => (
+              <Button
+                key={idx}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => setNewNote({ type: n.type, content: n.text, priority: n.priority })}
+              >
+                {n.label}
+              </Button>
+            ))}
+          </div>
           
           <Button 
             onClick={addNote} 

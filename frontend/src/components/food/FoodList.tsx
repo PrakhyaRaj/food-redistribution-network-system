@@ -12,6 +12,8 @@ import { Package, Calendar, Edit, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { RouteOptimization } from "@/components/RouteOptimization";
+import { useState, useEffect } from "react";
 
 // ✅ COMBINED PROPS (A + B)
 interface FoodListProps {
@@ -21,6 +23,83 @@ interface FoodListProps {
 }
 
 const FoodList = ({ foods, onUpdate, onSelectFood }: FoodListProps) => {
+  const [foodTransactions, setFoodTransactions] = useState<Record<number, any>>({});
+
+  // AI-style contextual notes derived from food attributes (local heuristic, no external calls)
+  const buildAutoNotes = (food: Food) => {
+    const notes: string[] = [];
+
+    const name = (food.food_name || food.name || "").toLowerCase();
+    const expiresInMs = new Date(food.expiry_date).getTime() - Date.now();
+    const daysToExpiry = Math.ceil(expiresInMs / (1000 * 60 * 60 * 24));
+
+    // Freshness / timing
+    if (!isNaN(daysToExpiry)) {
+      if (daysToExpiry <= 1) notes.push(`Highly perishable: aim to redistribute today (${daysToExpiry}d left)`);
+      else if (daysToExpiry <= 3) notes.push(`Use soon: best within ~${daysToExpiry} days`);
+      else notes.push(`Good shelf life: ~${daysToExpiry} days to expiry`);
+    }
+
+    // Quantity context
+    if (food.quantity >= 20) notes.push("Bulk lot: consider splitting across multiple receivers");
+    else if (food.quantity <= 3) notes.push("Small batch: prioritize a nearby receiver");
+
+    // Handling & storage cues
+    const needsChill = /milk|dairy|yogurt|cheese|meat|fish|chicken|beef|pork/.test(name);
+    if (needsChill) notes.push("Cold chain: keep refrigerated until handoff");
+
+    const spicy = /spicy|chili|chilli|pepper/.test(name);
+    if (spicy) notes.push("Flavor: spicy profile");
+
+    const nuts = /nut|almond|cashew|peanut|walnut|pistachio|hazelnut/.test(name);
+    if (nuts) notes.push("Allergy caution: contains nuts");
+
+    // Status-aware note
+    if (food.status === "in_transit") notes.push("In transit: confirm drop-off ETA");
+
+    return notes.slice(0, 4); // keep concise
+  };
+
+  // Load transactions for each food item when in matched/in_transit status
+  useEffect(() => {
+    const loadTransactions = async () => {
+      const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000";
+      for (const food of foods) {
+        if (food.status === "in_transit" || food.status === "completed") {
+          try {
+            const response = await fetch(`${API_BASE}/api/mongodb/transactions?food_id=${food.id}`, {
+              headers: {
+                "Authorization": `Bearer ${localStorage.getItem("token")}`,
+              },
+            });
+            if (response.ok) {
+              const text = await response.text();
+              let txns;
+              try {
+                txns = JSON.parse(text);
+              } catch (parseErr) {
+                console.error(`Failed to parse JSON for food ${food.id}:`, text.substring(0, 100));
+                return;
+              }
+              if (txns && txns.length > 0) {
+                setFoodTransactions(prev => ({
+                  ...prev,
+                  [food.id]: txns[0]
+                }));
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to load transaction for food ${food.id}:`, err);
+          }
+        }
+      }
+    };
+
+    if (foods.length > 0) {
+      loadTransactions();
+    }
+  }, [foods]);
+
   const handleDelete = async (foodId: number) => {
     if (!confirm("Are you sure you want to delete this food item?")) return;
 
@@ -75,6 +154,34 @@ const FoodList = ({ foods, onUpdate, onSelectFood }: FoodListProps) => {
                 {new Date(food.expiry_date).toLocaleDateString()}
               </span>
             </div>
+
+            {/* Auto-generated notes derived from the food attributes */}
+            <div className="pt-1 space-y-2">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Auto Notes</div>
+              <div className="flex flex-wrap gap-2">
+                {buildAutoNotes(food).map((note, idx) => (
+                  <Badge key={idx} variant="outline" className="text-[11px]">
+                    {note}
+                  </Badge>
+                ))}
+                {buildAutoNotes(food).length === 0 && (
+                  <Badge variant="secondary" className="text-[11px]">No notes</Badge>
+                )}
+              </div>
+            </div>
+
+              {/* 🆕 Route Optimization for matched/in-transit food */}
+              {foodTransactions[food.id] && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Redistribution Route</p>
+                  <RouteOptimization 
+                    transactionId={foodTransactions[food.id].txn_id}
+                    donorId={foodTransactions[food.id].donor_id}
+                    receiverId={foodTransactions[food.id].receiver_id}
+                    showFull={false}
+                  />
+                </div>
+              )}
           </CardContent>
 
           <CardFooter className="flex flex-col gap-2">

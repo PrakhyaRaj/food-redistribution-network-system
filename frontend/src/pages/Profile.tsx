@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { MongoDBCard } from "@/components/mongodb/MongoDBCard";
+import { TransactionHistory } from "@/components/mongodb/TransactionHistory";
 
 const ProfilePage: React.FC = () => {
   const navigate = useNavigate();

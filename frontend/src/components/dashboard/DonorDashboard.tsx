@@ -3,10 +3,13 @@ import { api, Food, Request as FoodRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Plus, Users, TrendingUp } from "lucide-react";
+import { RouteOptimization } from "@/components/RouteOptimization";
 import { Link } from "react-router-dom";
 import FoodList from "@/components/food/FoodList";
 import NearbyRequests from "@/components/food/NearbyRequests";
 import { toast } from "sonner";
+import { io, Socket } from "socket.io-client";
+import { FoodImages } from "@/components/food/FoodImages";
 
 // 👉 MongoDB Features (from A)
 import { 
@@ -29,24 +32,58 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
   const [requests, setRequests] = useState<FoodRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [isTokenReady, setIsTokenReady] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [latestTransaction, setLatestTransaction] = useState<any | null>(null);
+  const [selectedFoodId, setSelectedFoodId] = useState<number | null>(null);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log("DonorDashboard: loadData starting...");
 
       const [foodsData, requestsData] = await Promise.all([
         api.food.getMyFoods(parseInt(userId)),
         api.food.getNearbyRequests(),
       ]);
 
-      setFoods(Array.isArray(foodsData) ? foodsData : foodsData.foods || []);
-      setRequests(Array.isArray(requestsData) ? requestsData : requestsData.requests || []);
+      const mappedFoods = Array.isArray(foodsData) ? foodsData : foodsData.foods || [];
+      const mappedRequests = Array.isArray(requestsData) ? requestsData : requestsData.requests || [];
+      console.log("DonorDashboard: loadData got", { foods: mappedFoods.length, requests: mappedRequests.length });
+      setFoods(mappedFoods);
+      setRequests(mappedRequests);
+      if (mappedFoods.length > 0 && selectedFoodId === null) {
+        setSelectedFoodId(mappedFoods[0].id);
+      }
+
+      // Load latest transaction for route display
+      try {
+        const txns = await api.transactions.getUserTransactions(parseInt(userId));
+        const arr = Array.isArray(txns) ? txns : [];
+        const mine = arr
+          .filter((t: any) => t.donor_id === parseInt(userId))
+          .sort((a: any, b: any) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime());
+        if (mine.length > 0) setLatestTransaction(mine[0]);
+      } catch (e) {
+        console.log("No transactions found for donor");
+      }
     } catch (error) {
       toast.error("Failed to load data");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (foods.length === 0) {
+      if (selectedFoodId !== null) setSelectedFoodId(null);
+      return;
+    }
+
+    const exists = foods.some((food) => food.id === selectedFoodId);
+    if (!exists) {
+      setSelectedFoodId(foods[0].id);
+    }
+  }, [foods, selectedFoodId]);
 
   // Wait until token becomes available
   useEffect(() => {
@@ -59,7 +96,93 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
   }, []);
 
   useEffect(() => {
-    if (isTokenReady && userId) loadData();
+    if (isTokenReady && userId) {
+      loadData();
+      
+      // Connect to Socket.IO for real-time updates
+      const token = localStorage.getItem("token");
+      const newSocket = io("http://127.0.0.1:5000", {
+        // Force polling transport to avoid WebSocket frame/upgrade errors in dev
+        transports: ["polling"],
+        withCredentials: true,
+        // Send token via query string (most reliable)
+        query: { token },
+        // Also send via auth object as fallback
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: 5,
+      });
+
+      newSocket.on("connect", () => {
+        console.log("✅ DonorDashboard connected to Socket.IO");
+      });
+
+      // When a match is found, refresh food list to show updated status
+      newSocket.on("match_found", (data: any) => {
+        console.log("📦 Match found, refreshing food list...", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+      newSocket.on("transaction_created", (data: any) => {
+        console.log("💰 Transaction created (socket event)", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+
+      newSocket.on("transaction_created", (data: any) => {
+        console.log("💰 Transaction created, refreshing data...", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+
+      newSocket.on("transaction_updated", (data: any) => {
+        console.log("💰 Transaction updated, refreshing data...", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+
+      newSocket.on("food_added", (data: any) => {
+        console.log("🍲 Food added, refreshing data...", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+
+      newSocket.on("food_updated", (data: any) => {
+        console.log("🍲 Food updated, refreshing data...", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+
+      newSocket.on("request_created", (data: any) => {
+        console.log("📋 Request created, refreshing data...", data);
+        setTimeout(() => {
+          loadData();
+        }, 1000);
+      });
+
+      newSocket.on("notification", (data: any) => {
+        if (data.type === "match_found" || data.type === "food_accepted") {
+          console.log("📦 Notification: Food status changed", data);
+          setTimeout(() => {
+            loadData();
+          }, 1000);
+        }
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        if (newSocket) {
+          newSocket.disconnect();
+        }
+      };
+    }
   }, [isTokenReady, userId]);
 
   /* --------------------------------------------------------------------------
@@ -165,8 +288,26 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
         <NearbyRequests requests={requests.slice(0, 4)} onMatch={loadData} />
       </div>
 
+      {/* ---------------------- 5. ROUTE OPTIMIZATION SECTION ---------------------- */}
+      {latestTransaction && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Latest Delivery Route</h2>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/transactions">View All</Link>
+            </Button>
+          </div>
+          <RouteOptimization
+            transactionId={latestTransaction.txn_id}
+            donorId={latestTransaction.donor_id}
+            receiverId={latestTransaction.receiver_id}
+            showFull={true}
+          />
+        </div>
+      )}
+
       {/* ----------------------------------------------------------------------
-       * 5. MONGODB FEATURES (from A)
+       * 6. MONGODB FEATURES (from A)
        * ---------------------------------------------------------------------- */}
       <div className="border-t pt-10">
         <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
@@ -175,32 +316,51 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
         </h2>
 
         <Tabs defaultValue="overview">
-          <TabsList className="grid grid-cols-3 max-w-md">
+          <TabsList className="grid grid-cols-2 max-w-md">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="media">Food Media</TabsTrigger>
           </TabsList>
 
           {/* Overview */}
           <TabsContent value="overview" className="space-y-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ActivitiesFeed />
-              <RouteOptimizer />
-            </div>
-          </TabsContent>
-
-          {/* Analytics */}
-          <TabsContent value="analytics" className="py-4">
-            <AnalyticsDashboard />
+            <ActivitiesFeed />
           </TabsContent>
 
           {/* Media */}
           <TabsContent value="media" className="py-4">
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Food Images Management</h3>
-              <p className="text-gray-500">
-                Select a food item from "My Foods" to manage images.
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Food Images Management</h3>
+                  <p className="text-gray-500">Upload and manage images for your donated food items.</p>
+                </div>
+                {foods.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Food Item</span>
+                    <select
+                      className="border rounded-md px-3 py-2 text-sm"
+                      value={selectedFoodId ?? ""}
+                      onChange={(e) => setSelectedFoodId(Number(e.target.value))}
+                    >
+                      {foods.map((food) => (
+                        <option key={food.id} value={food.id}>
+                          {food.food_name} · qty {food.quantity}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {foods.length === 0 && (
+                <Card>
+                  <CardContent className="py-6 text-gray-600">Add a food item first to upload images.</CardContent>
+                </Card>
+              )}
+
+              {selectedFoodId !== null && foods.length > 0 && (
+                <FoodImages foodId={selectedFoodId} />
+              )}
             </div>
           </TabsContent>
         </Tabs>

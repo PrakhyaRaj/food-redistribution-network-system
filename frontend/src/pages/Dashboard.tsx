@@ -1,21 +1,42 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, Package, HandHeart, LogOut } from "lucide-react";
+import { Heart, Package, HandHeart, LogOut, Shield } from "lucide-react";
 import DonorDashboard from "@/components/dashboard/DonorDashboard";
 import ReceiverDashboard from "@/components/dashboard/ReceiverDashboard";
 import ProfileButton from "@/components/ProfileButton";
+import { HomepageFeedback } from "@/components/mongodb/HomepageFeedback";
+import { TransactionHistory } from "@/components/mongodb/TransactionHistory";
+
+import { 
+  NotificationCenter, 
+  FeedbackInsights, 
+  FoodNotesManager,
+  ActivitiesFeed,
+  AnalyticsDashboard 
+} from '@/components/mongodb';
 
 const Dashboard = () => {
   const { roles, logout, userId } = useAuth();
-  const [activeMode, setActiveMode] = useState<"donor" | "receiver">(
-    roles.includes("donor") ? "donor" : "receiver"
-  );
+  const navigate = useNavigate();
+  const [activeMode, setActiveMode] = useState<"donor" | "receiver">("donor");
 
   const isDonor = roles.includes("donor");
   const isReceiver = roles.includes("receiver");
   const isBoth = isDonor && isReceiver;
+
+  useEffect(() => {
+    if (roles.includes("admin") && !isDonor && !isReceiver) {
+      navigate("/admin/dashboard", { replace: true });
+    }
+  }, [roles, isDonor, isReceiver, navigate]);
+
+  useEffect(() => {
+    if (roles.includes("donor") && !roles.includes("receiver")) setActiveMode("donor");
+    else if (!roles.includes("donor") && roles.includes("receiver")) setActiveMode("receiver");
+  }, [roles]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-secondary/5">
@@ -34,11 +55,21 @@ const Dashboard = () => {
                   ? "Donor & Receiver"
                   : roles[0]?.charAt(0).toUpperCase() + roles[0]?.slice(1)}
               </p>
-            </div>
+            </div>  
           </div>
 
-          {/* Right: Profile button + Logout */}
+          {/* Right: Profile button + Logout + Admin Link */}
           <div className="flex items-center gap-2">
+            {roles.includes("admin") && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate("/admin/dashboard")}
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                Admin
+              </Button>
+            )}
             <ProfileButton />
             <Button variant="outline" size="sm" onClick={logout}>
               <LogOut className="h-4 w-4 mr-2" />
@@ -77,6 +108,33 @@ const Dashboard = () => {
         ) : (
           <ReceiverDashboard userId={userId!} />
         )}
+
+        {/* ================= Platform Analytics (MongoDB) ================= */}
+        <section className="mt-16">
+          {/* Section Divider */}
+          <div className="flex items-center gap-4 mb-8">
+            <div className="flex-1 h-px bg-border" />
+            <h2 className="text-2xl font-bold text-muted-foreground">
+              Platform Analytics
+            </h2>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Analytics Cards */}
+          <div className="space-y-8">
+            {/* Top analytics */}
+            <AnalyticsDashboard />
+
+            {/* Notifications + Feedback */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <NotificationCenter />
+              <HomepageFeedback />
+            </div>
+
+            {/* Activity feed */}
+            <ActivitiesFeed />
+          </div>
+        </section>
       </div>
     </div>
   );

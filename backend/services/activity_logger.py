@@ -109,3 +109,28 @@ class ActivityLogger:
             activity_type="notification_sent",
             details={"notification_type": notification_type}
         )
+
+    @staticmethod
+    def log_match_found(donor_id, receiver_id, food_id, request_id):
+        """Log when a match is found"""
+        mongo_service.log_activity(
+            user_id=donor_id,
+            activity_type="match_found",
+            details={
+                "role": "donor",
+                "receiver_id": receiver_id,
+                "food_id": food_id,
+                "request_id": request_id
+            }
+        )
+        
+        mongo_service.log_activity(
+            user_id=receiver_id,
+            activity_type="match_found",
+            details={
+                "role": "receiver",
+                "donor_id": donor_id,
+                "food_id": food_id,
+                "request_id": request_id
+            }
+        )

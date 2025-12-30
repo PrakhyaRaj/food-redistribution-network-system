@@ -1,4 +1,4 @@
-from backend import socketio
+from backend.extensions import socketio
 from backend.mongodb import mongo_service
 from datetime import datetime
 
@@ -10,20 +10,38 @@ class NotificationService:
         Returns True if successful
         """
         try:
+            print(f"📨 [NotificationService] Attempting to send notification to user {user_id}")
+            print(f"📨 [NotificationService] mongo_service: {mongo_service}")
+            print(f"📨 [NotificationService] mongo_service type: {type(mongo_service)}")
+            
             # 1. Send real-time via Socket.IO
             socketio.emit("notification", notification_data, room=f"user_{user_id}")
+            print(f"📨 [NotificationService] Socket.IO notification emitted for user {user_id}")
             
             # 2. Store in MongoDB for persistence
-            if mongo_service and mongo_service.is_connected():
-                mongo_service.store_notification(user_id, notification_data)
-                print(f"📨 Notification sent & stored for user {user_id}")
+            if mongo_service and hasattr(mongo_service, 'is_connected'):
+                try:
+                    is_connected = mongo_service.is_connected()
+                    print(f"📨 [NotificationService] MongoDB connected: {is_connected}")
+                    
+                    if is_connected:
+                        result = mongo_service.store_notification(user_id, notification_data)
+                        print(f"📨 Notification sent & stored for user {user_id}, ID: {result}")
+                    else:
+                        print(f"📨 Notification sent (MongoDB not connected for storage)")
+                except Exception as e:
+                    print(f"❌ [NotificationService] Error storing: {str(e)}")
+                    print(f"📨 Notification sent (MongoDB storage failed)")
             else:
+                print(f"📨 [NotificationService] mongo_service not available or missing is_connected method")
                 print(f"📨 Notification sent (MongoDB not available for storage)")
             
             return True
             
         except Exception as e:
             print(f"❌ Error in notification: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
     
     @staticmethod

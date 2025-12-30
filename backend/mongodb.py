@@ -105,18 +105,22 @@ class MongoService:
         return self.connected is True and self.db is not None
     
     def insert_feedback(self, user_id, message, feedback_type="general", metadata=None):
-        """Insert user feedback"""
+        """Insert user feedback with fields expected by the UI"""
         if not self.is_connected():
             print(f"⚠️ MongoDB not available - skipping feedback for user {user_id}")
             return None
-            
+
         try:
+            meta = metadata or {}
             doc = {
                 "user_id": user_id,
-                "type": feedback_type,
-                "message": message,
-                "metadata": metadata or {},
-                "created_at": datetime.utcnow()
+                # Align field names with frontend expectations
+                "feedback_type": meta.get("feedback_type", feedback_type),
+                "rating": meta.get("rating", 0),
+                "content": message,
+                "metadata": meta,
+                "status": "pending",  # so get_unresolved_feedback picks it up
+                "created_at": datetime.utcnow(),
             }
             result = self.db["feedback"].insert_one(doc)
             print(f"✅ Feedback stored for user {user_id}, ID: {result.inserted_id}")
@@ -202,10 +206,14 @@ class MongoService:
             doc = {
                 "user_id": user_id,
                 **notification_data,
-                "read": False,
                 "created_at": datetime.utcnow()
             }
+            # Ensure status field exists
+            if "status" not in doc:
+                doc["status"] = "unread"
+            
             result = self.db["notifications"].insert_one(doc)
+            print(f"✅ Notification stored: {result.inserted_id}")
             return str(result.inserted_id)
         except Exception as e:
             print(f"❌ Error storing notification: {e}")
@@ -217,9 +225,17 @@ class MongoService:
             return []
             
         try:
-            return list(self.db["notifications"].find(
-                {"user_id": user_id, "read": False}
+            notifications = list(self.db["notifications"].find(
+                {"user_id": user_id, "status": "unread"}
             ).sort("created_at", -1).limit(limit))
+            
+            # Convert ObjectId to string for JSON serialization
+            for n in notifications:
+                if '_id' in n:
+                    n['_id'] = str(n['_id'])
+            
+            print(f"✅ Retrieved {len(notifications)} unread notifications for user {user_id}")
+            return notifications
         except Exception as e:
             print(f"❌ Error getting unread notifications: {e}")
             return []
@@ -230,11 +246,49 @@ class MongoService:
             return []
             
         try:
-            return list(self.db["notifications"].find(
+            notifications = list(self.db["notifications"].find(
                 {"user_id": user_id}
             ).sort("created_at", -1).limit(limit))
+            
+            # Convert ObjectId to string for JSON serialization
+            for n in notifications:
+                if '_id' in n:
+                    n['_id'] = str(n['_id'])
+            
+            print(f"✅ Retrieved {len(notifications)} total notifications for user {user_id}")
+            return notifications
         except Exception as e:
             print(f"❌ Error getting all notifications: {e}")
+            return []
+
+    def get_notifications(self, user_id, unread_only=True, limit=50):
+        """Compatibility wrapper: get notifications for a user.
+
+        This method mirrors older API usage where callers expect
+        `get_notifications`. It delegates to the specific helpers
+        (`get_unread_notifications` / `get_all_notifications`) and
+        converts MongoDB ObjectId values to strings for JSON safety.
+        """
+        if not self.is_connected():
+            return []
+
+        try:
+            if unread_only:
+                notifications = list(self.db["notifications"].find(
+                    {"user_id": user_id, "read": False}
+                ).sort("created_at", -1).limit(limit))
+            else:
+                notifications = list(self.db["notifications"].find(
+                    {"user_id": user_id}
+                ).sort("created_at", -1).limit(limit))
+
+            for n in notifications:
+                if '_id' in n:
+                    n['_id'] = str(n['_id'])
+
+            return notifications
+        except Exception as e:
+            print(f"❌ Error getting notifications: {e}")
             return []
     
     def mark_as_read(self, notification_ids):
@@ -519,6 +573,66 @@ class MongoService:
             print(f"❌ Error getting analytics summary: {e}")
             return {}
 
+    def get_user_analytics_summary(self, user_id, days=30):
+        """Get user-specific analytics summary (items donated or received by user)"""
+        if not self.is_connected():
+            return {}
+    
+        try:
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+        
+            # Check if collection exists
+            if "redistribution_analytics" not in self.db.list_collection_names():
+                return {
+                    "total_food_saved_kg": 0,
+                    "total_people_fed": 0,
+                    "total_trees_planted": 0,
+                    "total_redistributions": 0,
+                    "avg_quantity_per_redistribution": 0
+                }
+        
+            # Match items where user is either donor or receiver
+            pipeline = [
+                {
+                    "$match": {
+                        "timestamp": {"$gte": cutoff_date},
+                        "$or": [
+                            {"donor_id": user_id},
+                            {"receiver_id": user_id}
+                        ]
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_food_saved_kg": {"$sum": "$quantity_kg"},
+                        "total_people_fed": {"$sum": "$impact_metrics.people_fed"},
+                        "total_carbon_saved": {"$sum": "$impact_metrics.carbon_saved_kg"},
+                        "total_redistributions": {"$sum": 1},
+                        "avg_quantity_per_redistribution": {"$avg": "$quantity_kg"}
+                    }
+                }
+            ]
+        
+            result = list(self.db["redistribution_analytics"].aggregate(pipeline))
+        
+            if result:
+                data = result[0]
+                # Calculate trees planted (1 tree per 20kg CO2 saved)
+                data["total_trees_planted"] = round(data.get("total_carbon_saved", 0) / 20)
+                return data
+            else:
+                return {
+                    "total_food_saved_kg": 0,
+                    "total_people_fed": 0,
+                    "total_trees_planted": 0,
+                    "total_redistributions": 0,
+                    "avg_quantity_per_redistribution": 0
+                }
+        except Exception as e:
+            print(f"❌ Error getting user analytics summary: {e}")
+            return {}
+
     def log_route_optimization(self, user_id, pickup_points, delivery_points, result=None):
         """Log route optimization request + result for auditing"""
         if not self.is_connected():
@@ -585,6 +699,192 @@ class MongoService:
         except Exception as e:
             print(f"❌ Error getting cached route: {e}")
             return None
+
+    # ============================
+    # TRANSACTION TRACKING
+    # ============================
+
+    def store_transaction(self, txn_id, donor_id, receiver_id, food_id, request_id, status, route_data=None, quantity=None, pickup_date=None):
+        """Store transaction record in MongoDB, including quantity and pickup schedule."""
+        if not self.is_connected():
+            print(f"⚠️ MongoDB not available - skipping transaction {txn_id}")
+            return None
+        
+        try:
+            doc = {
+                "txn_id": txn_id,
+                "donor_id": donor_id,
+                "receiver_id": receiver_id,
+                "food_id": food_id,
+                "request_id": request_id,
+                "status": status,
+                "route_data": route_data,
+                "quantity": quantity,
+                "pickup_date": pickup_date,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            result = self.db["transactions"].insert_one(doc)
+            print(f"✅ Transaction {txn_id} stored, MongoDB ID: {result.inserted_id}")
+            return str(result.inserted_id)
+        except Exception as e:
+            print(f"❌ Error storing transaction: {e}")
+            return None
+
+    def get_user_transactions(self, user_id, limit=50):
+        """Get all transactions for a user (as donor or receiver)"""
+        if not self.is_connected():
+            return []
+        
+        try:
+            transactions = list(self.db["transactions"].find({
+                "$or": [
+                    {"donor_id": user_id},
+                    {"receiver_id": user_id}
+                ]
+            }).sort("created_at", -1).limit(limit))
+            
+            # Convert ObjectId to string
+            for txn in transactions:
+                if '_id' in txn:
+                    txn['_id'] = str(txn['_id'])
+            
+            return transactions
+        except Exception as e:
+            print(f"❌ Error getting transactions: {e}")
+            return []
+
+    def update_transaction_status(self, txn_id, new_status):
+        """Update transaction status"""
+        if not self.is_connected():
+            return False
+        
+        try:
+            result = self.db["transactions"].update_one(
+                {"txn_id": txn_id},
+                {
+                    "$set": {
+                        "status": new_status,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"❌ Error updating transaction: {e}")
+            return False
+
+    def get_transaction_stats(self, user_id):
+        """Get transaction statistics for a user"""
+        if not self.is_connected():
+            return {}
+        
+        try:
+            stats = {
+                "total_donations": self.db["transactions"].count_documents(
+                    {"donor_id": user_id}
+                ),
+                "total_received": self.db["transactions"].count_documents(
+                    {"receiver_id": user_id}
+                ),
+                "completed_donations": self.db["transactions"].count_documents(
+                    {"donor_id": user_id, "status": "completed"}
+                ),
+                "completed_received": self.db["transactions"].count_documents(
+                    {"receiver_id": user_id, "status": "completed"}
+                )
+            }
+            return stats
+        except Exception as e:
+            print(f"❌ Error getting transaction stats: {e}")
+            return {}
+
+    # ============================
+    # ROUTE OPTIMIZATION TRACKING
+    # ============================
+
+    def store_route_optimization(self, request_id, matches, optimization_result):
+        """Store route optimization result"""
+        if not self.is_connected():
+            return None
+        
+        try:
+            doc = {
+                "request_id": request_id,
+                "matches": matches,
+                "optimization_result": optimization_result,
+                "created_at": datetime.utcnow()
+            }
+            result = self.db["route_optimizations"].insert_one(doc)
+            return str(result.inserted_id)
+        except Exception as e:
+            print(f"❌ Error storing route optimization: {e}")
+            return None
+
+    def get_route_optimizations(self, request_id):
+        """Get route optimizations for a request"""
+        if not self.is_connected():
+            return []
+        
+        try:
+            optimizations = list(self.db["route_optimizations"].find(
+                {"request_id": request_id}
+            ).sort("created_at", -1))
+            
+            # Convert ObjectId
+            for opt in optimizations:
+                if '_id' in opt:
+                    opt['_id'] = str(opt['_id'])
+            
+            return optimizations
+        except Exception as e:
+            print(f"❌ Error getting route optimizations: {e}")
+            return []
+
+    # ============================
+    # MATCHING NOTIFICATIONS
+    # ============================
+
+    def store_match_notification(self, request_id, food_id, donor_id, receiver_id, match_data):
+        """Store match found notification"""
+        if not self.is_connected():
+            return None
+        
+        try:
+            doc = {
+                "type": "match_found",
+                "request_id": request_id,
+                "food_id": food_id,
+                "donor_id": donor_id,
+                "receiver_id": receiver_id,
+                "match_data": match_data,
+                "created_at": datetime.utcnow(),
+                "read_by_donor": False,
+                "read_by_receiver": False
+            }
+            result = self.db["match_notifications"].insert_one(doc)
+            
+            # Also create user notifications
+            for user_id in [donor_id, receiver_id]:
+                self.store_notification(
+                    user_id,
+                    {
+                        "type": "match_found",
+                        "title": "Food Match Found!" if user_id == receiver_id else "Your food has a match!",
+                        "message": f"Match found for request {request_id}",
+                        "data": {
+                            "request_id": request_id,
+                            "food_id": food_id
+                        }
+                    }
+                )
+            
+            return str(result.inserted_id)
+        except Exception as e:
+            print(f"❌ Error storing match notification: {e}")
+            return None
+
+
 
 # Singleton instance
 mongo_service = None

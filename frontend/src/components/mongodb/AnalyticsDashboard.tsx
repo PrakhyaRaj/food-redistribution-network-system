@@ -3,19 +3,89 @@ import { MongoDBCard } from './MongoDBCard';
 import { api, AnalyticsSummary } from '@/lib/api';
 import { TrendingUp, TrendingDown, Users, Leaf, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { io, Socket } from 'socket.io-client';
 
 export const AnalyticsDashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     loadAnalytics();
+
+    // Connect to Socket.IO for real-time updates
+    const token = localStorage.getItem('token');
+    const newSocket = io('http://127.0.0.1:5000', {
+      transports: ['polling'],
+      withCredentials: true,
+      query: { token },
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 5,
+    });
+
+    newSocket.on('transaction_created', () => {
+      console.log('📈 Analytics: Refreshing due to transaction created');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    newSocket.on('transaction_updated', () => {
+      console.log('📈 Analytics: Refreshing due to transaction updated');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    newSocket.on('match_found', () => {
+      console.log('📈 Analytics: Refreshing due to match found');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    newSocket.on('food_matched', () => {
+      console.log('📈 Analytics: Refreshing due to food matched');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    newSocket.on('food_added', () => {
+      console.log('📈 Analytics: Refreshing due to food item');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    newSocket.on('food_updated', () => {
+      console.log('📈 Analytics: Refreshing due to food updated');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    newSocket.on('analytics_updated', () => {
+      console.log('📈 Analytics: Refreshing due to analytics_updated event');
+      setTimeout(() => {
+        loadAnalytics();
+      }, 1000);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      if (newSocket) {
+        newSocket.disconnect();
+      }
+    };
   }, []);
 
   const loadAnalytics = async () => {
     try {
       setLoading(true);
-      const data = await api.mongodb.getAnalytics(); // Use mongodb.getAnalytics
+      const data = await api.mongodb.getUserAnalytics(); // Use user-specific analytics
       setAnalytics(data.summary || data);
     } catch (error) {
       console.error('Failed to load analytics:', error);
@@ -45,11 +115,11 @@ export const AnalyticsDashboard: React.FC = () => {
               </Badge>
             </div>
             <p className="text-3xl font-bold text-green-900">
-              {analytics.total_food_saved_kg} kg
+              {analytics.total_food_saved_kg || 0} kg
             </p>
             <p className="text-sm text-green-700 mt-1 flex items-center gap-1">
               <Users className="h-3 w-3" />
-              ≈ {analytics.total_people_fed} people fed
+              ≈ {analytics.total_people_fed || 0} people fed
             </p>
           </div>
           
@@ -57,19 +127,17 @@ export const AnalyticsDashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-blue-800 flex items-center gap-2">
                 <Leaf className="h-4 w-4" />
-                🌱 Carbon Saved
+                🌱 Trees Planted
               </h4>
               <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                {analytics.total_carbon_saved >= 1000 
-                  ? `${(analytics.total_carbon_saved / 1000).toFixed(1)} tons` 
-                  : `${analytics.total_carbon_saved} kg`}
+                {(analytics.total_trees_planted || 0) || Math.round(((analytics.total_carbon_saved || 0) / 20) || 0)} trees
               </Badge>
             </div>
             <p className="text-3xl font-bold text-blue-900">
-              {analytics.total_carbon_saved} kg CO₂
+              {(analytics.total_trees_planted || 0) || Math.round(((analytics.total_carbon_saved || 0) / 20) || 0)}
             </p>
             <p className="text-sm text-blue-700 mt-1">
-              Equivalent to {Math.round(analytics.total_carbon_saved / 22)} trees planted
+              Based on {Math.round(analytics.total_carbon_saved || 0)} kg CO₂ saved (1 tree per 20 kg)
             </p>
           </div>
           
@@ -86,11 +154,11 @@ export const AnalyticsDashboard: React.FC = () => {
                   ) : (
                     <TrendingDown className="h-3 w-3" />
                   )}
-                  {analytics.weekly_trend > 0 ? '+' : ''}{analytics.weekly_trend}%
+                  {analytics.weekly_trend > 0 ? '+' : ''}{analytics.weekly_trend || 0}%
                 </Badge>
               </div>
               <p className="text-sm text-gray-600 mt-2">
-                {analytics.weekly_trend > 0 
+                {(analytics.weekly_trend || 0) > 0 
                   ? 'Positive growth this week!'
                   : 'Looking for improvement this week'}
               </p>

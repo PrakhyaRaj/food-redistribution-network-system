@@ -16,6 +16,9 @@ import Transactions from "./pages/Transactions";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import NotificationHandler from "@/components/NotificationHandler"; 
+import RequestDetail from "./pages/RequestDetail";
+import { TransactionHistory } from "@/components/mongodb/TransactionHistory";
+import AdminDashboard from "@/components/dashboard/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -76,7 +79,23 @@ const App = () => (
               path="/transactions"
               element={
                 <ProtectedRoute>
-                  <Transactions />
+                  <TransactionHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/requests/:requestId"
+              element={
+                <ProtectedRoute>
+                  <RequestDetail />
+                </ProtectedRoute>
+              } 
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedRoute>
+                  <AdminDashboard />
                 </ProtectedRoute>
               }
             />

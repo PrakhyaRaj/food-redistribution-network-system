@@ -20,7 +20,7 @@ export interface Food {
 }
 
 export interface Request {
-  id: number;
+  id: number;          // frontend id
   receiver_id: number;
   food_type: string;
   quantity: number;
@@ -263,6 +263,14 @@ export const api = {
         // ignore network errors on logout
       }
     },
+
+    testToken: async () => {
+      return handleResponse(
+        await fetch(`${API_BASE}/auth/debug-token`, {
+          headers: getHeaders(),
+        })
+      );
+    },
   },
 
   user: {
@@ -305,14 +313,17 @@ export const api = {
       });
       const data = await handleResponse(response);
       console.log("🔍 GET_MY_FOODS response:", data);
-  
-      // Map backend fields to frontend interface
-      return data.map((item: any) => ({
-        id: item.food_id,  // Map food_id → id
-        donor_id: item.donor_id,
-        food_name: item.food_name,
+
+      if (!data) return [];
+
+      // Map backend fields to frontend interface. Accept either `food_id` or `id`.
+      const arr = Array.isArray(data) ? data : data.foods || [];
+      return arr.map((item: any) => ({
+        id: item.food_id ?? item.id,
+        donor_id: item.donor_id ?? item.donorId ?? null,
+        food_name: item.food_name ?? item.name ?? item.foodName,
         quantity: item.quantity,
-        expiry_date: item.expiry_date,
+        expiry_date: item.expiry_date ?? item.expiryDate,
         status: item.status || 'available'
       }));
     }, 
@@ -341,25 +352,48 @@ export const api = {
       });
       const data = await handleResponse(response);
       console.log("🔍 GET_NEARBY_REQUESTS response:", data);
-  
-      // Map backend fields to frontend interface
-      return data.map((item: any) => ({
-        id: item.request_id,  // Map request_id → id
-        receiver_id: item.receiver_id,
-        food_type: item.food_type,
+
+      if (!data) return [];
+
+      const arr = Array.isArray(data) ? data : data.requests || [];
+      // Map backend fields to frontend interface. Accept either `request_id` or `id`.
+      return arr.map((item: any) => ({
+        id: item.request_id ?? item.id,
+        receiver_id: item.receiver_id ?? item.receiverId ?? null,
+        food_type: item.food_type ?? item.foodType ?? item.food_type,
         quantity: item.quantity,
-        urgency_level: item.urgency_level,
+        urgency_level: item.urgency_level ?? item.urgencyLevel,
         deadline: item.deadline,
         status: item.status || 'pending'
       }));
     },
 
     match: async (foodId: number, requestId: number) => {
-      const response = await fetch(`${API_BASE}/food/match/${foodId}/${requestId}`, {
-        method: "POST",
-        headers: getHeaders(),
-      });
-      return handleResponse(response);
+      // Try donor-facing match endpoint first; if forbidden (403),
+      // fall back to the receiver-facing create-transaction endpoint.
+      const donorUrl = `${API_BASE}/food/match/${foodId}/${requestId}`;
+      const receiverUrl = `${API_BASE}/requests/${requestId}/matches/${foodId}/create-transaction`;
+
+      try {
+        const res = await fetch(donorUrl, { method: "POST", headers: getHeaders() });
+        if (res.ok) {
+          console.log("api.match: used donor endpoint", donorUrl);
+          return handleResponse(res);
+        }
+
+        // If donor endpoint forbids (e.g., current user is receiver), try receiver endpoint
+        if (res.status === 403) {
+          console.warn("api.match: donor endpoint returned 403, trying receiver endpoint");
+          const res2 = await fetch(receiverUrl, { method: "POST", headers: getHeaders() });
+          return handleResponse(res2);
+        }
+
+        // For other non-ok statuses, let handleResponse produce the error
+        return handleResponse(res);
+      } catch (err) {
+        console.error("api.match error", err);
+        throw err;
+      }
     },
 
     getDonorTransactions: async (donorId: number) => {
@@ -418,6 +452,17 @@ export const api = {
       });
       return handleResponse(response);
     },
+
+    findMatches: async (requestId: number) => {
+      const response = await fetch(
+        `${API_BASE}/requests/${requestId}/find-matches`,
+        {
+          method: "POST",
+          headers: getHeaders(),
+        }
+      );
+      return handleResponse(response);
+    },
   },
 
   transactions: {
@@ -442,12 +487,12 @@ export const api = {
     },
 
     getUserTransactions: async (userId: number) => {
-      const response = await fetch(`${API_BASE}/transactions/user/${userId}`, {
+      const res = await fetch(`${API_BASE}/transactions/user/${userId}`, {
         headers: getHeaders(),
       });
-      return handleResponse(response);
-    },
-
+      if (res.status === 404) return [];
+      return handleResponse(res);
+    },  
     updateStatus: async (txnId: number, status: string) => {
       const response = await fetch(`${API_BASE}/transactions/update/${txnId}`, {
         method: "PUT",
@@ -456,9 +501,52 @@ export const api = {
       });
       return handleResponse(response);
     },
+
+    markDelivered: async (txnId: number) => {
+      return api.transactions.updateStatus(txnId, "delivered");
+    },
+
+    markReceived: async (txnId: number) => {
+      return api.transactions.updateStatus(txnId, "received");
+    },
   },
 
-  // MongoDB Features - ADD THIS SECTION
+  // Generic HTTP methods (top-level, not inside mongodb)
+  get: async (url: string) => {
+    const response = await fetch(`${API_BASE}${url}`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  post: async (url: string, data: any) => {
+    const response = await fetch(`${API_BASE}${url}`, {
+      method: "POST",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
+
+  put: async (url: string, data: any) => {
+    const response = await fetch(`${API_BASE}${url}`, {
+      method: "PUT",
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
+
+  delete: async (url: string) => {
+    const response = await fetch(`${API_BASE}${url}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // MongoDB Features
   mongodb: {
     // Activities
     getActivities: async (limit: number = 5) => {
@@ -473,6 +561,20 @@ export const api = {
       const response = await fetch(`${API_BASE}/api/analytics/summary`, {
         headers: getHeaders(),
       });
+      return handleResponse(response);
+    },
+
+    // Get user-specific analytics (for dashboards)
+    getUserAnalytics: async () => {
+      const response = await fetch(`${API_BASE}/api/analytics/summary?user_specific=true`, {
+        headers: getHeaders(),
+      });
+      return handleResponse(response);
+    },
+
+    // Get global analytics (public endpoint for login page)
+    getGlobalAnalytics: async () => {
+      const response = await fetch(`${API_BASE}/api/analytics/global-summary`);
       return handleResponse(response);
     },
     

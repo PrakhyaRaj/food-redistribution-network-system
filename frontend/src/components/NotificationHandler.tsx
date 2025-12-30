@@ -41,10 +41,17 @@ const NotificationHandler = () => {
       return;
     }
 
-    // Connect to WebSocket server
+    console.log('🔑 Token found, attempting connection with:', token ? 'Bearer token' : 'no token');
+
+    // Connect to WebSocket server with token in multiple ways for compatibility
     const newSocket = io('http://127.0.0.1:5000', {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,  // Add this
+      transports: ['polling'],
+      withCredentials: true,
+      // Send token via query string (most reliable for Socket.IO)
+      query: {
+        token: token
+      },
+      // Also send via auth object as fallback
       auth: {
         token: token
       },
@@ -103,6 +110,20 @@ const NotificationHandler = () => {
           });
           break;
         
+        case 'match_found':
+          toast.success('🎉 Match Found!', {
+            description: notification.message,
+            duration: 6000,
+            action: {
+              label: 'View',
+              onClick: () => {
+                // Navigate to matches page
+                window.location.href = `/requests/${notification.request_id}`;
+              }
+            }
+          });
+          break;
+        
         case 'transaction_update':
           toast.info(notification.title, {
             description: notification.message,
@@ -116,6 +137,21 @@ const NotificationHandler = () => {
             duration: 4000,
           });
       }
+    });
+
+    // Listen for real-time match notifications
+    newSocket.on('match_found', (data: any) => {
+      console.log('🎉 Match notification received:', data);
+      toast.success('🎉 Match Found!', {
+        description: data.message,
+        duration: 6000,
+        action: {
+          label: 'View Match',
+          onClick: () => {
+            window.location.href = `/requests/${data.request_id}`;
+          }
+        }
+      });
     });
 
     newSocket.on('disconnect', (reason) => {

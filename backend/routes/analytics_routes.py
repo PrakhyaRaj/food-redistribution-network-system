@@ -4,10 +4,9 @@ from datetime import datetime, timedelta
 
 analytics_bp = Blueprint('analytics_bp', __name__, url_prefix='/api/analytics')
 
-@analytics_bp.route('/summary', methods=['GET'])
-@jwt_required()
-def get_analytics_summary():
-    """Get analytics summary"""
+@analytics_bp.route('/global-summary', methods=['GET'])
+def get_global_analytics_summary():
+    """Get global analytics summary (public endpoint for login page)"""
     from backend.mongodb import mongo_service
     
     days = request.args.get('days', 30, type=int)
@@ -19,6 +18,34 @@ def get_analytics_summary():
             "success": True,
             "summary": summary,
             "period_days": days,
+            "generated_at": datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@analytics_bp.route('/summary', methods=['GET'])
+@jwt_required()
+def get_analytics_summary():
+    """Get analytics summary - returns global or user-specific based on param"""
+    from backend.mongodb import mongo_service
+    
+    days = request.args.get('days', 30, type=int)
+    user_specific = request.args.get('user_specific', 'false').lower() == 'true'
+    
+    try:
+        if user_specific:
+            # Get user-specific analytics (for dashboards)
+            user_id = get_jwt_identity()
+            summary = mongo_service.get_user_analytics_summary(int(user_id), days)
+        else:
+            # Get global analytics (for login page)
+            summary = mongo_service.get_analytics_summary(days)
+        
+        return jsonify({
+            "success": True,
+            "summary": summary,
+            "period_days": days,
+            "user_specific": user_specific,
             "generated_at": datetime.utcnow().isoformat()
         }), 200
     except Exception as e:

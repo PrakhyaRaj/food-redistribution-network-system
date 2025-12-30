@@ -1,8 +1,6 @@
 # backend/__init__.py
-from flask_socketio import SocketIO
-
-# Create socketio instance here
-socketio = SocketIO(cors_allowed_origins="*")
+# Import socketio from extensions instead of creating another instance
+from backend.extensions import socketio
 
 # Export for use in other modules
 __all__ = ['socketio']

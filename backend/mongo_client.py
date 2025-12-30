@@ -19,6 +19,14 @@ class MongoService:
             self.db = self.client.get_default_database() or self.client["foodshare"]
         self._ensure_indexes()
 
+    def is_connected(self):
+        """Check if MongoDB is connected"""
+        try:
+            self.client.admin.command('ping')
+            return True
+        except Exception:
+            return False
+
     def _ensure_indexes(self):
         # feedback_logs: keep for 90 days
         try:
@@ -79,6 +87,32 @@ class MongoService:
             "created_at": __import__("datetime").datetime.utcnow()
         }
         return self.db.notifications.insert_one(doc).inserted_id
+
+    def store_notification(self, user_id, notification_data):
+        """Store a notification for a user"""
+        doc = {
+            "user_id": user_id,
+            "type": notification_data.get("type", "general"),
+            "title": notification_data.get("title", ""),
+            "message": notification_data.get("message", ""),
+            "transaction_id": notification_data.get("transaction_id"),
+            "status": notification_data.get("status", "unread"),
+            "created_at": __import__("datetime").datetime.utcnow()
+        }
+        return self.db.notifications.insert_one(doc).inserted_id
+
+    def get_unread_notifications(self, user_id, limit=50):
+        """Get unread notifications for a user"""
+        return list(self.db.notifications.find({
+            "user_id": user_id,
+            "status": "unread"
+        }).sort("created_at", -1).limit(limit))
+
+    def get_all_notifications(self, user_id, limit=50):
+        """Get all notifications for a user"""
+        return list(self.db.notifications.find({
+            "user_id": user_id
+        }).sort("created_at", -1).limit(limit))
 
     def get_pending_notifications(self, limit=100):
         return list(self.db.notifications.find({"status": "pending"}).limit(limit))

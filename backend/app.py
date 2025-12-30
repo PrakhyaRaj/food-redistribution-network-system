@@ -22,7 +22,12 @@ def create_app(config_object=None):
     # ============================
     CORS(
         app,
-        origins=["http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:8081", "http://127.0.0.1:8081"],
+        origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080"
+        ],
         supports_credentials=True,
         allow_headers=["*"],  # Allow all headers
         methods=["*"],  # Allow all methods
@@ -45,7 +50,7 @@ def create_app(config_object=None):
     db.init_app(app)
     migrate.init_app(app, db, directory="backend/migrations")  # points to backend/migrations
     jwt.init_app(app)
-    socketio.init_app(app)
+    socketio.init_app(app, cors_allowed_origins="*", ping_timeout=60, ping_interval=25)
 
     # ============================
     # Socket.IO CORS handling
@@ -57,6 +62,11 @@ def create_app(config_object=None):
     @socketio.on('disconnect')
     def handle_disconnect():
         print('🔌 Client disconnected')
+    
+    # ============================
+    # Import Socket.IO handlers after socketio is initialized
+    # ============================
+    from backend import sockets  # Import socket handlers after socketio is initialized
 
     # init_mongo(app)
     # Temporarily disable MongoDB
@@ -105,6 +115,8 @@ def create_app(config_object=None):
         from backend.routes.analytics_routes import analytics_bp
         from backend.routes.route_routes import route_bp
         from backend.routes.notes_routes import notes_bp
+        from backend.routes.mongodb_routes import mongodb_bp
+        from backend.routes.admin_routes import admin_bp
         # from backend.routes.logs_routes import logs_bp
 
         app.register_blueprint(auth_bp, url_prefix="/auth")
@@ -117,6 +129,8 @@ def create_app(config_object=None):
         app.register_blueprint(analytics_bp)
         app.register_blueprint(route_bp)
         app.register_blueprint(notes_bp)
+        app.register_blueprint(mongodb_bp)
+        app.register_blueprint(admin_bp)
         # app.register_blueprint(logs_bp)
     from backend.routes.logs_routes import logs_bp
     app.register_blueprint(logs_bp)

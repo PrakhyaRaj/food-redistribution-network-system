@@ -1,5 +1,6 @@
-from flask import Blueprint, request, jsonify
-from backend.models import Request, Transaction, db, FoodItem
+from flask import Blueprint, request, jsonify, current_app
+import traceback
+from backend.models import Request, Transaction, db, FoodItem, User
 from datetime import datetime
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from backend.auth import roles_required
@@ -7,6 +8,7 @@ from backend.validation import (
     validate_food_data, ValidationError, handle_validation_error as validation_error_handler
 )
 from backend.notifications import NotificationService
+from backend.extensions import socketio
 
 food_bp = Blueprint("food_bp", __name__, url_prefix="/food")
 
@@ -36,6 +38,17 @@ def add_food():
         db.session.add(new_food)
         db.session.commit()
         
+        # Emit real-time notification via Socket.IO
+        food_data = {
+            "food_id": new_food.food_id,
+            "donor_id": donor_id,
+            "name": new_food.name,
+            "quantity": new_food.quantity,
+            "expiry_date": new_food.expiry_date.strftime("%Y-%m-%d") if new_food.expiry_date else None,
+            "status": new_food.status or "available"
+        }
+        socketio.emit('food_added', food_data)
+        
         return jsonify({
             "success": True,
             "message": "Food item added successfully!", 
@@ -44,11 +57,14 @@ def add_food():
         
     except ValidationError:
         raise
-    except Exception:
+    except Exception as e:
+        # Log full traceback for debugging
+        traceback.print_exc()
+        current_app.logger.error(f"Add food error: {str(e)}")
         db.session.rollback()
         return jsonify({
             "success": False,
-            "error": "Failed to add food item due to server error"
+            "error": f"Failed to add food item due to server error: {str(e)}"
         }), 500
 
 
@@ -136,6 +152,18 @@ def update_food(food_id):
                 raise ValidationError("Expiry date must be in YYYY-MM-DD format", "expiry_date")
 
         db.session.commit()
+        
+        # Emit real-time update via Socket.IO
+        food_data = {
+            "food_id": food.food_id,
+            "donor_id": food.donor_id,
+            "name": food.name,
+            "quantity": food.quantity,
+            "expiry_date": food.expiry_date.strftime("%Y-%m-%d") if food.expiry_date else None,
+            "status": food.status or "available"
+        }
+        socketio.emit('food_updated', food_data)
+        
         return jsonify({
             "success": True,
             "message": "Food item updated successfully!"
@@ -210,8 +238,10 @@ def get_nearby_requests():
 @roles_required('donor')
 def match_food(food_id, request_id):
     try:
+        print(f"🔍 MATCH_FOOD: food_id={food_id}, request_id={request_id}")
         food = FoodItem.query.get(food_id)
         req = Request.query.get(request_id)
+        print(f"🔍 MATCH_FOOD: food={food}, req={req}")
 
         if not food:
             return jsonify({
@@ -231,13 +261,15 @@ def match_food(food_id, request_id):
                 "error": "Unauthorized - you can only match your own food items"
             }), 403
 
-        # Create transaction
+        # Create transaction with quantity and pickup_date
         new_txn = Transaction(
             donor_id=food.donor_id,
             receiver_id=req.receiver_id,
             food_id=food_id,
             request_id=request_id,
-            status="claimed"
+            quantity=req.quantity,  # Use request quantity
+            pickup_date=datetime.now(),  # Default to current time
+            status="initiated"
         )
 
         # Update related statuses
@@ -247,13 +279,68 @@ def match_food(food_id, request_id):
         db.session.add(new_txn)
         db.session.commit()
 
-        # SEND REAL-TIME NOTIFICATION - ADD THIS
-        NotificationService.notify_food_matched(
-            food_id=food_id,
-            request_id=request_id,
-            donor_id=food.donor_id,
-            receiver_id=req.receiver_id
-        )
+        # Compute route data immediately
+        print(f"🗺️ [MATCH] Computing route for transaction {new_txn.txn_id}...")
+        route_data = None
+        try:
+            from .transaction_routes import compute_route_data
+            donor_user = User.query.get(food.donor_id)
+            receiver_user = User.query.get(req.receiver_id)
+            route_data = compute_route_data(donor_user, receiver_user)
+            print(f"🗺️ [MATCH] Route data computed: {route_data}")
+        except Exception as re:
+            print(f"⚠️ [MATCH] Route optimization failed (non-blocking): {re}")
+            import traceback
+            traceback.print_exc()
+
+        # Store transaction in MongoDB with route_data
+        try:
+            print(f"🗺️ [MATCH] Storing transaction in MongoDB...")
+            from backend.mongodb import mongo_service
+            mongo_service.store_transaction(
+                txn_id=new_txn.txn_id,
+                donor_id=food.donor_id,
+                receiver_id=req.receiver_id,
+                food_id=food_id,
+                request_id=request_id,
+                status="initiated",
+                food_name=food.name,
+                food_quantity=food.quantity,
+                food_unit=food.unit,
+                route_data=route_data,
+                quantity=getattr(new_txn, "quantity", None),
+                pickup_date=getattr(new_txn, "pickup_date", None)
+            )
+            print(f"✅ [MATCH] Transaction stored in MongoDB with route_data")
+        except Exception as me:
+            print(f"⚠️ [MATCH] MongoDB storage failed (non-blocking): {me}")
+            import traceback
+            traceback.print_exc()
+
+        # SYNC ANALYTICS AFTER TRANSACTION - NON-BLOCKING
+        print(f"📊 [MATCH] About to sync analytics for transaction {new_txn.txn_id}...")
+        try:
+            from backend.services.analytics_service import AnalyticsService
+            print(f"📊 [MATCH] AnalyticsService imported successfully")
+            AnalyticsService.sync_analytics_after_transaction(new_txn, food)
+            print(f"✅ [MATCH] Analytics sync completed for transaction {new_txn.txn_id}")
+        except Exception as ae:
+            print(f"❌ [MATCH] Analytics sync failed (non-blocking): {ae}")
+            import traceback
+            traceback.print_exc()
+
+        # SEND REAL-TIME NOTIFICATION - NON-BLOCKING
+        try:
+            NotificationService.notify_food_matched(
+                food_id=food_id,
+                request_id=request_id,
+                donor_id=food.donor_id,
+                receiver_id=req.receiver_id
+            )
+        except Exception as notif_error:
+            # Notification failed but transaction succeeded - don't block
+            print(f"⚠️  Notification creation failed (non-critical): {notif_error}")
+            current_app.logger.warning(f"Notification error: {notif_error}")
 
         return jsonify({
             "success": True,
@@ -263,9 +350,12 @@ def match_food(food_id, request_id):
         
     except Exception as e:
         db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        current_app.logger.error(f"Match food error: {str(e)}")
         return jsonify({
             "success": False,
-            "error": "Failed to match food due to server error"
+            "error": f"Failed to match food due to server error: {str(e)}"
         }), 500
 
 

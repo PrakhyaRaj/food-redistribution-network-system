@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MongoDBCard } from './MongoDBCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Navigation, MapPin, Package, Clock, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { io, Socket } from 'socket.io-client';
 
 interface RoutePoint {
   lat: number;
@@ -44,6 +45,39 @@ export const RouteOptimizer: React.FC = () => {
   const [optimizing, setOptimizing] = useState(false);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Set up Socket.IO listener for real-time updates
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const newSocket = io('http://127.0.0.1:5000', {
+      transports: ['polling'],
+      withCredentials: true,
+      query: { token },
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 5,
+    });
+
+    newSocket.on('transaction_created', () => {
+      console.log('🗺️ Route Optimizer: Transaction detected, route may need reoptimization');
+      // Clear previous results to prompt re-optimization
+      setRouteResult(null);
+    });
+
+    newSocket.on('food_added', () => {
+      console.log('🗺️ Route Optimizer: New food item, route may need reoptimization');
+      setRouteResult(null);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      if (newSocket) {
+        newSocket.disconnect();
+      }
+    };
+  }, []);
 
   const addPickupPoint = () => {
     setPickupPoints([

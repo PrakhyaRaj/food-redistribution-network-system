@@ -5,7 +5,15 @@ from flask_jwt_extended import JWTManager
 from flask_socketio import SocketIO
 
 # Simple SocketIO configuration
-socketio = SocketIO(cors_allowed_origins="*")  # Allow all for now
+# Using async_mode='threading' for better Flask compatibility
+socketio = SocketIO(
+    cors_allowed_origins="*",
+    async_mode='threading',
+    ping_timeout=60,
+    ping_interval=25,
+    engineio_logger=False,
+    socketio_logger=False
+)
 
 db = SQLAlchemy()
 migrate = Migrate()
