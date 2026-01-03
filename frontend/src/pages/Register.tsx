@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Heart, Loader2 } from "lucide-react";
+import LocationPicker from "@/components/LocationPicker";
 
 const Register = () => {
   const { register, isAuthenticated } = useAuth();
@@ -20,6 +21,7 @@ const Register = () => {
   });
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [locationSelected, setLocationSelected] = useState(false);
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -33,10 +35,19 @@ const Register = () => {
     }
   };
 
+  const handleLocationChange = (lat: number, lng: number) => {
+    setFormData({ ...formData, location_lat: lat, location_long: lng });
+    setLocationSelected(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (roles.length === 0) {
       alert("Please select at least one role");
+      return;
+    }
+    if (!locationSelected) {
+      alert("Please select your location using the map or current location button");
       return;
     }
     setLoading(true);
@@ -110,6 +121,17 @@ const Register = () => {
                 autoComplete="new-password"
               />
             </div>
+            <div className="space-y-2">
+              <Label>Location *</Label>
+              <LocationPicker
+                latitude={formData.location_lat}
+                longitude={formData.location_long}
+                onLocationChange={handleLocationChange}
+              />
+              <p className="text-sm text-muted-foreground">
+                Location is required to match donors and receivers nearby.
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="lat">Latitude</Label>
@@ -117,10 +139,9 @@ const Register = () => {
                   id="lat"
                   type="number"
                   step="any"
-                  placeholder="12.34"
                   value={formData.location_lat || ""}
-                  onChange={(e) => setFormData({ ...formData, location_lat: parseFloat(e.target.value) })}
-                  required
+                  readOnly
+                  className="bg-gray-50"
                 />
               </div>
               <div className="space-y-2">
@@ -129,10 +150,9 @@ const Register = () => {
                   id="long"
                   type="number"
                   step="any"
-                  placeholder="56.78"
                   value={formData.location_long || ""}
-                  onChange={(e) => setFormData({ ...formData, location_long: parseFloat(e.target.value) })}
-                  required
+                  readOnly
+                  className="bg-gray-50"
                 />
               </div>
             </div>
@@ -163,7 +183,7 @@ const Register = () => {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !locationSelected}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
