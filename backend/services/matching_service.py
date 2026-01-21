@@ -333,6 +333,28 @@ class MatchingService:
                 status='initiated'
             )
             
+            # Compute route data and store in transaction
+            route_data = None
+            try:
+                from backend.services.route_optimizer import RouteOptimizer
+                donor = User.query.get(transaction.donor_id)
+                receiver = User.query.get(transaction.receiver_id)
+                if donor and receiver and donor.location_lat and donor.location_long and receiver.location_lat and receiver.location_long:
+                    route_result = RouteOptimizer.optimize_route(
+                        donor_lat=donor.location_lat,
+                        donor_long=donor.location_long,
+                        receiver_lat=receiver.location_lat,
+                        receiver_long=receiver.location_long,
+                        quantity=1,
+                        pickup_date=transaction.pickup_date
+                    )
+                    if route_result.get('success'):
+                        route_data = route_result
+                        transaction.route_data = route_data  # Store in SQL
+                        print(f"✅ Route data computed and stored in SQL transaction")
+            except Exception as e:
+                print(f"⚠️ Route optimization (matching) failed (non-blocking): {e}")
+            
             # Update food status
             food.quantity -= match_quantity
             if food.quantity == 0:

@@ -64,89 +64,75 @@ export const RouteOptimization: React.FC<RouteOptimizationProps> = ({
         
         console.log('🗺️ [RouteOptimization] Starting fetch, transactionId:', transactionId);
         
-        // Try to fetch from MongoDB analytics if transaction exists
-        if (transactionId) {
-          const response = await fetch(
-            `${API_BASE}/api/mongodb/transactions?txn_id=${transactionId}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              },
-            }
-          );
-          
+        // Always fetch latest transactions to ensure we get the most recent route
+        console.log('🗺️ [RouteOptimization] Fetching all user transactions...');
+        try {
+          const response = await fetch(`${API_BASE}/api/mongodb/transactions`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+            },
+          });
           console.log('🗺️ [RouteOptimization] Response status:', response.status);
           
-            if (response.ok) {
-              const text = await response.text();
-              let data;
-              try {
-                data = JSON.parse(text);
-              } catch (e) {
-                console.error('❌ [RouteOptimization] Failed to parse JSON:', text.substring(0, 200));
-                return;
-              }
-              console.log('🗺️ [RouteOptimization] Response data:', data);
-              if (data.transactions && data.transactions[0]) {
-                const txn = data.transactions[0];
-                console.log('🗺️ [RouteOptimization] Transaction:', txn);
-                console.log('🗺️ [RouteOptimization] Transaction route_data:', txn.route_data);
-                const mapped = mapRouteData(txn);
-                console.log('🗺️ [RouteOptimization] Mapped route data:', mapped);
+          if (response.ok) {
+            const text = await response.text();
+            let data;
+            try {
+              data = JSON.parse(text);
+            } catch (e) {
+              console.error('❌ [RouteOptimization] Failed to parse JSON:', text.substring(0, 200));
+              return;
+            }
+            console.log('🗺️ [RouteOptimization] Response data:', data);
+            console.log('🗺️ [RouteOptimization] Number of transactions:', data.transactions?.length || 0);
+            
+            // If transactionId provided, try to find that specific transaction first
+            if (transactionId) {
+              const specificTxn = (data.transactions || []).find(
+                (t: any) => t.txn_id === transactionId || t._id === transactionId
+              );
+              if (specificTxn && specificTxn.route_data?.route) {
+                const mapped = mapRouteData(specificTxn);
                 if (mapped) {
-                  console.log('✅ [RouteOptimization] Setting route data from transaction');
+                  console.log('✅ [RouteOptimization] Setting route data from specific transaction');
                   setRouteData(mapped);
                   foundRoute = true;
-                } else {
-                  console.warn('⚠️ [RouteOptimization] No route data found in transaction');
                 }
-              } else {
-                console.warn('⚠️ [RouteOptimization] No transactions found for txn_id:', transactionId);
               }
             }
-        }
-
-        // Fallback: use most recent transaction with route_data for current user
-        if (!foundRoute) {
-          console.log('🗺️ [RouteOptimization] Trying fallback - fetching all user transactions...');
-          try {
-            const fallbackResp = await fetch(`${API_BASE}/api/mongodb/transactions`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-              },
-            });
-            console.log('🗺️ [RouteOptimization] Fallback response status:', fallbackResp.status);
-            if (fallbackResp.ok) {
-              const text = await fallbackResp.text();
-              let data;
-              try {
-                data = JSON.parse(text);
-              } catch (e) {
-                console.error('❌ [RouteOptimization] Fallback failed to parse JSON:', text.substring(0, 200));
-                return;
-              }
-              console.log('🗺️ [RouteOptimization] Fallback data:', data);
-              console.log('🗺️ [RouteOptimization] Number of transactions:', data.transactions?.length || 0);
-              const firstWithRoute = (data.transactions || []).find(
+            
+            // If no specific transaction found or no transactionId, use most recent with route_data
+            if (!foundRoute) {
+              const transactionsWithRoutes = (data.transactions || []).filter(
                 (t: any) => t?.route_data?.route
               );
-              console.log('🗺️ [RouteOptimization] First transaction with route:', firstWithRoute);
-              if (firstWithRoute) {
-                const mapped = mapRouteData(firstWithRoute);
-                console.log('🗺️ [RouteOptimization] Mapped fallback route:', mapped);
+              
+              // Sort by created_at or _id to get the most recent
+              transactionsWithRoutes.sort((a: any, b: any) => {
+                const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                return timeB - timeA; // Descending order (newest first)
+              });
+              
+              const mostRecentWithRoute = transactionsWithRoutes[0];
+              console.log('🗺️ [RouteOptimization] Most recent transaction with route:', mostRecentWithRoute);
+              
+              if (mostRecentWithRoute) {
+                const mapped = mapRouteData(mostRecentWithRoute);
+                console.log('🗺️ [RouteOptimization] Mapped route:', mapped);
                 if (mapped) {
-                  console.log('✅ [RouteOptimization] Setting route data from fallback transaction');
+                  console.log('✅ [RouteOptimization] Setting route data from most recent transaction');
                   setRouteData(mapped);
-                  setFallbackUsed(true);
+                  setFallbackUsed(!transactionId);
                   foundRoute = true;
                 }
               } else {
                 console.warn('⚠️ [RouteOptimization] No transactions with route_data found');
               }
             }
-          } catch (err) {
-            console.error('❌ [RouteOptimization] Fallback route fetch failed', err);
           }
+        } catch (err) {
+          console.error('❌ [RouteOptimization] Route fetch failed', err);
         }
       } catch (error) {
         console.error('❌ [RouteOptimization] Failed to fetch route optimization:', error);
@@ -155,7 +141,6 @@ export const RouteOptimization: React.FC<RouteOptimizationProps> = ({
       }
     };
 
-    // Allow fallback even when transactionId is missing
     fetchRouteOptimization();
   }, [transactionId]);
 

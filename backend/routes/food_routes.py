@@ -304,9 +304,6 @@ def match_food(food_id, request_id):
                 food_id=food_id,
                 request_id=request_id,
                 status="initiated",
-                food_name=food.name,
-                food_quantity=food.quantity,
-                food_unit=food.unit,
                 route_data=route_data,
                 quantity=getattr(new_txn, "quantity", None),
                 pickup_date=getattr(new_txn, "pickup_date", None)

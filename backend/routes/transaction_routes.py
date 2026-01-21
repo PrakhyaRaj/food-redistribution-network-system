@@ -24,7 +24,7 @@ def create_transaction_data(donor_id, receiver_id, food_id, quantity=None, picku
     }
 
 
-def compute_route_data(donor: User, receiver: User):
+def compute_route_data(donor: User, receiver: User, pickup_date=None):
     """Compute route data using OSRM when possible, fall back to haversine."""
     try:
         from backend.services.route_optimizer import RouteOptimizer
@@ -148,39 +148,44 @@ def create_transaction():
     except Exception:
         # leave existing status if assignment fails
         pass
-    db.session.add(transaction)
-    db.session.commit()
-
-    # Try to persist transaction (and route optimization) to MongoDB (non-blocking)
+    
+    # Compute route data BEFORE committing
     route_data = None
     try:
-        from backend.mongodb import mongo_service
-
         print(f"🗺️ [TRANSACTION] Fetching donor and receiver for route computation...")
         donor = User.query.get(data["donor_id"])
         receiver = User.query.get(data["receiver_id"])
         print(f"🗺️ [TRANSACTION] Donor: {donor.name if donor else 'None'}, Receiver: {receiver.name if receiver else 'None'}")
         
-        route_data = compute_route_data(donor, receiver)
+        # Pass pickup_date to route computation
+        pickup_date = data.get("pickup_date")
+        route_data = compute_route_data(donor, receiver, pickup_date)
         print(f"🗺️ [TRANSACTION] Route data computed: {route_data is not None}")
         if route_data:
-            print(f"🗺️ [TRANSACTION] Route data keys: {route_data.keys()}")
-            if route_data.get('route'):
-                print(f"🗺️ [TRANSACTION] Route details: {route_data['route']}")
+            print(f"🗺️ [TRANSACTION] Storing route_data in SQL transaction")
+            transaction.route_data = route_data
+    except Exception as e:
+        print(f"⚠️ Route computation failed (non-blocking): {e}")
+    
+    db.session.add(transaction)
+    db.session.commit()
+    print(f"✅ [TRANSACTION] Transaction {transaction.txn_id} created with route_data in SQL")
+
+    # Try to persist transaction (and route optimization) to MongoDB (non-blocking)
+    try:
+        from backend.mongodb import mongo_service
 
         if mongo_service and mongo_service.is_connected():
             print(f"🗺️ [TRANSACTION] MongoDB connected, storing transaction...")
             try:
                 if route_data:
-                    print(f"🗺️ [TRANSACTION] Storing route optimization...")
+                    print(f"🗺️ [TRANSACTION] Storing route optimization in MongoDB...")
                     mongo_service.store_route_optimization(None, [], route_data)
-                    print(f"✅ [TRANSACTION] Route optimization stored")
+                    print(f"✅ [TRANSACTION] Route optimization stored in MongoDB")
             except Exception as e:
-                print(f"⚠️ Failed to store route optimization: {e}")
-                import traceback
-                traceback.print_exc()
+                print(f"⚠️ Failed to store route optimization in MongoDB: {e}")
 
-            print(f"🗺️ [TRANSACTION] Storing transaction with route_data...")
+            print(f"🗺️ [TRANSACTION] Storing transaction with route_data in MongoDB...")
             mongo_service.store_transaction(
                 txn_id=transaction.txn_id,
                 donor_id=transaction.donor_id,
@@ -194,11 +199,9 @@ def create_transaction():
             )
             print(f"✅ [TRANSACTION] Transaction stored in MongoDB with route_data")
         else:
-            print(f"❌ [TRANSACTION] MongoDB not connected")
+            print(f"⚠️ [TRANSACTION] MongoDB not connected, using SQL storage only")
     except Exception as e:
-        print(f"⚠️ Mongo/route storage skipped: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"⚠️ Mongo storage skipped: {e}")
 
     # Emit real-time notification via Socket.IO AND store in MongoDB
     transaction_data = format_transaction_response(transaction)

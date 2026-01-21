@@ -180,6 +180,7 @@ class Transaction(db.Model):
     request_id = db.Column(db.Integer, db.ForeignKey("requests.request_id"), nullable=True)
     quantity = db.Column(db.Integer, nullable=True)  # Quantity of food in this transaction
     pickup_date = db.Column(db.DateTime, nullable=True)  # Scheduled or actual pickup date
+    route_data = db.Column(db.JSON, nullable=True)  # Store route optimization data
     status = db.Column(txn_status_enum, default="initiated", nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))

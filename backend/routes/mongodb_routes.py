@@ -21,7 +21,7 @@ def get_user_transactions():
     try:
         mongo_service = get_mongo_service()
         user_id = get_jwt_identity()
-        # Convert JWT identity (string) to int for MongoDB query
+        # Convert JWT identity (string) to int for queries
         try:
             user_id = int(user_id)
         except (ValueError, TypeError):
@@ -30,37 +30,75 @@ def get_user_transactions():
                 "error": "Invalid user identity"
             }), 400
         
-        if not mongo_service or not mongo_service.is_connected():
+        # Try MongoDB first
+        if mongo_service and mongo_service.is_connected():
+            # Get transactions from MongoDB
+            transactions = mongo_service.get_user_transactions(user_id)
+            
+            # Filter by txn_id if provided
+            txn_id = request.args.get('txn_id', type=int)
+            if txn_id:
+                transactions = [t for t in transactions if t.get('txn_id') == txn_id]
+
+            # Sort newest-first to surface the latest optimized route
+            def _txn_sort_key(t):
+                created = t.get('created_at') or t.get('date') or ''
+                return (str(created), t.get('txn_id', 0))
+            transactions = sorted(transactions, key=_txn_sort_key, reverse=True)
+            
+            # Get stats
+            stats = mongo_service.get_transaction_stats(user_id)
+            
             return jsonify({
-                "success": False,
-                "error": "MongoDB not available"
-            }), 503
+                "success": True,
+                "transactions": transactions,
+                "stats": stats,
+                "count": len(transactions),
+                "source": "mongodb"
+            }), 200
         
-        # Get transactions from MongoDB
-        transactions = mongo_service.get_user_transactions(user_id)
+        # Fallback to SQL if MongoDB not available
+        print("⚠️ MongoDB not available, using SQL fallback")
+        transactions = SQLTransaction.query.filter(
+            db.or_(
+                SQLTransaction.donor_id == user_id,
+                SQLTransaction.receiver_id == user_id
+            )
+        ).order_by(SQLTransaction.created_at.desc()).all()
         
         # Filter by txn_id if provided
-        txn_id = request.args.get('txn_id', type=int)
-        if txn_id:
-            transactions = [t for t in transactions if t.get('txn_id') == txn_id]
-
-        # Sort newest-first to surface the latest optimized route
-        def _txn_sort_key(t):
-            created = t.get('created_at') or t.get('date') or ''
-            return (str(created), t.get('txn_id', 0))
-        transactions = sorted(transactions, key=_txn_sort_key, reverse=True)
+        txn_id_param = request.args.get('txn_id', type=int)
+        if txn_id_param:
+            transactions = [t for t in transactions if t.txn_id == txn_id_param]
         
-        # Get stats
-        stats = mongo_service.get_transaction_stats(user_id)
+        # Format transactions
+        result = []
+        for txn in transactions:
+            txn_dict = {
+                "txn_id": txn.txn_id,
+                "donor_id": txn.donor_id,
+                "receiver_id": txn.receiver_id,
+                "food_id": txn.food_id,
+                "request_id": txn.request_id,
+                "quantity": txn.quantity,
+                "pickup_date": txn.pickup_date.isoformat() if txn.pickup_date else None,
+                "status": txn.status,
+                "created_at": txn.created_at.isoformat() if txn.created_at else None,
+                "route_data": txn.route_data  # Include route data from SQL
+            }
+            result.append(txn_dict)
         
         return jsonify({
             "success": True,
-            "transactions": transactions,
-            "stats": stats,
-            "count": len(transactions)
+            "transactions": result,
+            "stats": {"total": len(result)},
+            "count": len(result),
+            "source": "sql"
         }), 200
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "error": f"Error fetching transactions: {str(e)}"
