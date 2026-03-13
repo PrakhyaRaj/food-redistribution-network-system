@@ -57,47 +57,146 @@ frontend/
 ├── src/
 │   ├── components/
 │   │   ├── dashboard/
-│   │   │   ├── AdminDashboard.tsx
-│   │   │   ├── DonorDashboard.tsx
-│   │   │   └── ReceiverDashboard.tsx
+│   │   │   ├── AdminDashboard.tsx      # Admin management interface
+│   │   │   ├── DonorDashboard.tsx      # Donor-specific dashboard
+│   │   │   └── ReceiverDashboard.tsx   # Receiver-specific dashboard
 │   │   ├── food/
-│   │   │   ├── FoodList.tsx
-│   │   │   └── FoodNotes.tsx
-│   │   ├── home/
-│   │   │   └── Homepage.tsx
-│   │   ├── mongodb/
-│   │   │   ├── AnalyticsSummary.tsx
-│   │   │   ├── MongoDBCard.tsx
-│   │   │   ├── NotificationHandler.tsx
-│   │   │   ├── RouteOpt.tsx
-│   │   │   ├── TransactionHistory.tsx
-│   │   │   └── submitfeedback.tsx
-│   │   ├── profile/
-│   │   │   └── ProfileFeedback.tsx
+│   │   │   ├── FoodList.tsx            # Food listings grid with search/filter
+│   │   │   └── FoodForm.tsx            # Add/edit food items
 │   │   ├── requests/
-│   │   │   ├── MatchedFoods.tsx
-│   │   │   └── RequestList.tsx
-│   │   ├── ui/
-│   │   │   └── ... (UI components)
-│   │   ├── AnalyticsSummary.tsx
-│   │   ├── NavLink.tsx
-│   │   ├── NotificationHandler.tsx
-│   │   ├── ProfileButton.tsx
-│   │   └── ProtectedRoute.tsx
+│   │   │   ├── RequestList.tsx         # Browse and manage requests
+│   │   │   └── MatchedFoods.tsx        # View matched food items
+│   │   ├── mongodb/
+│   │   │   ├── AnalyticsSummary.tsx    # Analytics charts and metrics
+│   │   │   ├── NotificationHandler.tsx # Real-time notification system
+│   │   │   ├── TransactionHistory.tsx  # Transaction history and status
+│   │   │   └── FeedbackInsights.tsx    # User feedback and ratings
+│   │   ├── ui/                         # Reusable UI components (shadcn/ui)
+│   │   ├── LocationPicker.tsx          # Interactive map for location selection
+│   │   ├── RouteOptimization.tsx       # Route planning and optimization
+│   │   ├── FoodBankMap.tsx             # Government food bank locations
+│   │   ├── NotificationHandler.tsx     # Socket.IO notification client
+│   │   └── ProtectedRoute.tsx          # Authentication guard component
 │   ├── contexts/
-│   │   └── AuthContext.tsx
+│   │   └── AuthContext.tsx             # Authentication state management
 │   ├── hooks/
-│   │   ├── useFoodImages.ts
-│   │   └── useFoodNotes.ts
+│   │   ├── use-mobile.tsx              # Mobile device detection
+│   │   └── use-toast.ts                # Toast notification system
 │   ├── lib/
-│   │   ├── api.ts
-│   │   └── utils.ts
+│   │   ├── api.ts                      # API client with authentication
+│   │   └── utils.ts                    # Utility functions
 │   ├── pages/
-│   │   ├── Login.tsx
-│   │   ├── Register.tsx
-│   │   ├── Dashboard.tsx
-│   │   └── AdminDashboard.tsx
-│   ├── App.tsx
+│   │   ├── Login.tsx                   # User authentication
+│   │   ├── Register.tsx                # User registration
+│   │   ├── Dashboard.tsx               # Main dashboard router
+│   │   ├── AddFood.tsx                 # Food donation form
+│   │   ├── AddRequest.tsx              # Food request form
+│   │   ├── MyFoods.tsx                 # User's donated food items
+│   │   ├── MyRequests.tsx              # User's food requests
+│   │   ├── AdminDashboard.tsx          # Administrative controls
+│   │   ├── Profile.tsx                 # User profile management
+│   │   ├── RequestDetail.tsx           # Detailed request view
+│   │   ├── Transactions.tsx            # Transaction management
+│   │   ├── NGOPage.tsx                 # NGO information and connections
+│   │   └── NotFound.tsx                # 404 error page
+│   ├── App.tsx                         # Main application component
+│   └── main.tsx                        # Application entry point
+├── package.json                        # npm dependencies and scripts
+├── vite.config.ts                      # Vite build configuration
+├── tailwind.config.ts                  # Tailwind CSS configuration
+├── tsconfig.json                       # TypeScript configuration
+└── eslint.config.js                    # ESLint configuration
+```
+
+## Key Features
+
+### Authentication & Authorization
+- JWT-based authentication with automatic token refresh
+- Role-based access control (Donor, Receiver, Admin)
+- Protected routes with automatic redirects
+- Persistent login state across browser sessions
+
+### Real-time Features
+- Socket.IO integration for instant notifications
+- Live transaction status updates
+- Real-time matching alerts
+- Activity feed updates
+
+### Interactive Components
+- **FoodBankMap**: Leaflet-based map showing government food banks
+- **LocationPicker**: Interactive location selection with geocoding
+- **RouteOptimization**: Visual route planning with OSRM integration
+- **Analytics Dashboard**: Charts and metrics using Recharts
+
+### Responsive Design
+- Mobile-first approach with Tailwind CSS
+- Adaptive layouts for all screen sizes
+- Touch-friendly interactions
+- Progressive Web App ready
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_URL` | Backend API base URL | `http://127.0.0.1:5000` |
+| `VITE_SOCKET_URL` | Socket.IO server URL | `http://127.0.0.1:5000` |
+
+## Development Scripts
+
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run build:dev    # Build for development
+npm run preview      # Preview production build
+npm run lint         # Run ESLint
+```
+
+## API Integration
+
+The frontend communicates with the Flask backend through a centralized API client (`src/lib/api.ts`) that handles:
+- Automatic JWT token attachment
+- Error handling and retries
+- Request/response interceptors
+- Type-safe API calls
+
+## State Management
+
+Uses React Context API for global state:
+- **AuthContext**: User authentication and role management
+- Local component state for UI interactions
+- Real-time updates via Socket.IO events
+
+## Build & Deployment
+
+### Development
+```bash
+npm run dev
+```
+
+### Production Build
+```bash
+npm run build
+```
+
+### Preview Production Build
+```bash
+npm run preview
+```
+
+## Browser Support
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14+
+- Edge 90+
+
+## Contributing
+
+1. Follow the existing code style and TypeScript types
+2. Use the provided UI components from shadcn/ui
+3. Test components across different screen sizes
+4. Ensure proper error handling for API calls
+5. Update this README when adding new features
 │   ├── main.tsx
 │   └── index.css
 ├── .env.local

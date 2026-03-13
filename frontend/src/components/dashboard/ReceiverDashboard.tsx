@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { api, Request as FoodRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { HandHeart, Plus, CheckCircle, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HandHeart, Plus, CheckCircle, Clock, Calendar, Map } from "lucide-react";
 import { Link } from "react-router-dom";
 import RequestList from "@/components/requests/RequestList";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
 import { RouteOptimization } from "@/components/RouteOptimization";
+import MealPlanner from "@/components/MealPlanner";
+import FoodBankMap from "@/components/FoodBankMap";
 
 interface ReceiverDashboardProps {
   userId: string;
@@ -213,34 +216,65 @@ const ReceiverDashboard = ({ userId }: ReceiverDashboardProps) => {
         </CardContent>
       </Card>
 
-      {/* Recent Requests */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">Your Recent Requests</h2>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/requests/my">View All</Link>
-          </Button>
-        </div>
-        <RequestList requests={requests.slice(0, 4)} onUpdate={loadData} />
-      </div>
+      {/* Tabs for different sections */}
+      <Tabs defaultValue="requests" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-2xl mx-auto">
+          <TabsTrigger value="requests" className="gap-2">
+            <HandHeart className="h-4 w-4" />
+            My Requests
+          </TabsTrigger>
+          <TabsTrigger value="meal-planner" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            Meal Planner
+          </TabsTrigger>
+          <TabsTrigger value="food-banks" className="gap-2">
+            <Map className="h-4 w-4" />
+            Food Banks
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Route Optimization */}
-      {latestTransaction && (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">Latest Delivery Route</h2>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/transactions">View All</Link>
-            </Button>
+        {/* Requests Tab */}
+        <TabsContent value="requests" className="space-y-6 mt-6">
+          {/* Recent Requests */}
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Your Recent Requests</h2>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/requests/my">View All</Link>
+              </Button>
+            </div>
+            <RequestList requests={requests.slice(0, 4)} onUpdate={loadData} />
           </div>
-          <RouteOptimization
-            transactionId={latestTransaction.txn_id}
-            donorId={latestTransaction.donor_id}
-            receiverId={latestTransaction.receiver_id}
-            showFull={true}
-          />
-        </div>
-      )}
+
+          {/* Route Optimization */}
+          {latestTransaction && (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold">Latest Delivery Route</h2>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/transactions">View All</Link>
+                </Button>
+              </div>
+              <RouteOptimization
+                transactionId={latestTransaction.txn_id}
+                donorId={latestTransaction.donor_id}
+                receiverId={latestTransaction.receiver_id}
+                showFull={true}
+              />
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Meal Planner Tab */}
+        <TabsContent value="meal-planner" className="mt-6">
+          <MealPlanner />
+        </TabsContent>
+
+        {/* Food Banks Tab */}
+        <TabsContent value="food-banks" className="mt-6">
+          <FoodBankMap />
+        </TabsContent>
+      </Tabs>
 
     </div>
   );

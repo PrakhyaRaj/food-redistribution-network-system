@@ -4,8 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Users, MapPin, Phone, Mail, Globe, Heart } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Building2, Users, MapPin, Phone, Mail, Globe, Heart, Calendar, Map } from "lucide-react";
 import { toast } from "sonner";
+import MealPlanner from "@/components/MealPlanner";
+import FoodBankMap from "@/components/FoodBankMap";
 
 interface NGO {
   id: number;
@@ -181,13 +184,42 @@ const NGOPage = () => {
       <div className="flex items-center gap-3 mb-6">
         <Building2 className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-3xl font-bold">Match with Organizations</h1>
-          <p className="text-muted-foreground">Connect with NGOs and organizations for food redistribution</p>
+          <h1 className="text-3xl font-bold">Organizations & Food Resources</h1>
+          <p className="text-muted-foreground">Plan meals, connect with NGOs, and discover government food banks</p>
         </div>
       </div>
 
-      {/* NGO Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Tabs for different sections */}
+      <Tabs defaultValue="meal-planner" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-3xl mx-auto mb-6">
+          <TabsTrigger value="meal-planner" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            Meal Planner
+          </TabsTrigger>
+          <TabsTrigger value="food-banks" className="gap-2">
+            <Map className="h-4 w-4" />
+            Food Banks Map
+          </TabsTrigger>
+          <TabsTrigger value="ngos" className="gap-2">
+            <Building2 className="h-4 w-4" />
+            NGO Partners
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Meal Planner Tab */}
+        <TabsContent value="meal-planner" className="space-y-6">
+          <MealPlanner />
+        </TabsContent>
+
+        {/* Food Banks Map Tab */}
+        <TabsContent value="food-banks" className="space-y-6">
+          <FoodBankMap />
+        </TabsContent>
+
+        {/* NGO Partners Tab */}
+        <TabsContent value="ngos" className="space-y-6">
+          {/* NGO Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {ngoData.map((ngo) => (
           <Card key={ngo.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
@@ -245,6 +277,25 @@ const NGOPage = () => {
         ))}
       </div>
 
+      {/* Info Section */}
+      <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">
+        <CardContent className="py-8">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <Building2 className="h-16 w-16 text-primary flex-shrink-0" />
+            <div className="text-center md:text-left">
+              <h3 className="text-xl font-semibold mb-2">Supporting Bangalore NGOs & Orphanages</h3>
+              <p className="text-muted-foreground">
+                Connect directly with {ngoData.length} verified organizations across Bangalore. 
+                Your food donations help feed children and families in need. Click "Donate" on any 
+                organization to submit your food donation details.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+        </TabsContent>
+      </Tabs>
+
       {/* Donation Dialog */}
       <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-[425px]">
@@ -295,23 +346,6 @@ const NGOPage = () => {
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Info Section */}
-      <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">
-        <CardContent className="py-8">
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <Building2 className="h-16 w-16 text-primary flex-shrink-0" />
-            <div className="text-center md:text-left">
-              <h3 className="text-xl font-semibold mb-2">Supporting Bangalore NGOs & Orphanages</h3>
-              <p className="text-muted-foreground">
-                Connect directly with {ngoData.length} verified organizations across Bangalore. 
-                Your food donations help feed children and families in need. Click "Donate" on any 
-                organization to submit your food donation details.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

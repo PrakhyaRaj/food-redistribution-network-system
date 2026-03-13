@@ -19,6 +19,12 @@ A modern, full-stack platform connecting food donors with receivers to reduce wa
 - **Smart Matching**: Automatic donor-receiver matching based on location
 - **Real-time Notifications**: Instant alerts for new matches via Socket.IO
 
+### For Organizations (NGOs, Community Centers)
+- **Meal Planning Calculator**: Calculate food requirements for specific number of people and days
+- **Government Food Banks Map**: Interactive map showing 10+ government food distribution centers across Bangalore
+- **NGO Network**: Connect with 15+ verified NGOs and orphanages
+- **Bulk Request Planning**: Plan multi-day meal requirements (prototype feature)
+
 ### For Admins
 - **User Management**: View, promote, or deactivate users
 - **System Monitoring**: Track food listings, requests, and transactions
@@ -251,6 +257,53 @@ npm run dev
 ```
 
 **Frontend will run at:** http://localhost:5173
+
+---
+
+## 🔐 Personal Data Configuration
+
+Before running the application, you need to configure personal/secret values in the following files:
+
+### Backend Configuration (`backend/.env`)
+Create `backend/.env` from `backend/.env.example`:
+
+```env
+# REQUIRED: PostgreSQL Database Password
+DATABASE_URL=postgresql+psycopg2://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/frns_db
+
+# REQUIRED: JWT Secret Key (Generate a secure random string)
+JWT_SECRET_KEY=YOUR_SECURE_RANDOM_JWT_SECRET_KEY_HERE
+
+# OPTIONAL: MongoDB (if using MongoDB features)
+MONGO_URI=mongodb://root:YOUR_MONGO_PASSWORD@localhost:27017/frns_db?authSource=admin
+```
+
+**How to generate JWT_SECRET_KEY:**
+```bash
+# Python
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### Frontend Configuration (`frontend/.env.local`)
+Create `frontend/.env.local` from `frontend/.env.example`:
+
+```env
+VITE_API_URL=http://127.0.0.1:5000
+VITE_SOCKET_URL=http://127.0.0.1:5000
+```
+
+### Database Passwords
+- **PostgreSQL**: Set during Docker container creation or local installation
+- **MongoDB**: Set during Docker container creation (default: `example`)
+
+### Security Notes
+- Never commit `.env` files to version control
+- Use strong, unique passwords for databases
+- Generate new JWT secrets for production
+- Rotate secrets periodically
 
 ---
 
@@ -1052,8 +1105,6 @@ All rights reserved. Internal project for food redistribution network.
 
 ---
 
-## 📞 Support
-
 ### Resources
 - **Backend Logs**: Check terminal running `python app.py`
 - **Frontend Logs**: Browser console (F12)
@@ -1089,5 +1140,5 @@ All rights reserved. Internal project for food redistribution network.
 Built with ❤️ for reducing food waste and supporting communities
 
 **Version:** 1.0.0  
-**Last Updated:** 2024  
+**Last Updated:** March 13, 2026  
 **Maintained by:** FRNS Development Team
