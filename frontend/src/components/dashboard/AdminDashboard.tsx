@@ -6,14 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, RadarChart, 
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart
 } from "recharts";
 import {
   Users, Package, ShoppingCart, TrendingUp, LogOut, BarChart3,
-  PieChart as PieChartIcon, ChevronLeft, ChevronRight, Trash2, Edit, Shield,
+  PieChart as PieChartIcon, ChevronLeft, ChevronRight, Trash2, Edit, Shield, RefreshCw,
+  Activity, Clock, MapPin, Star
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { io, Socket } from 'socket.io-client';
 
 const AdminDashboard = () => {
   const { roles, logout } = useAuth();
@@ -29,6 +32,9 @@ const AdminDashboard = () => {
   const [activityData, setActivityData] = useState<any>(null);
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState({ users: 1, foods: 1, requests: 1, transactions: 1 });
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [realtimeStats, setRealtimeStats] = useState<any>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   useEffect(() => {
     if (!roles.includes("admin")) {
@@ -37,17 +43,71 @@ const AdminDashboard = () => {
     }
   }, [roles, navigate]);
 
+  // Real-time Socket.IO connection for admin
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      setIsLoading(true);
-      try {
-        const response = await api.get("/api/admin/dashboard/summary");
-        if (response.success) setDashboardData(response.summary);
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+    const token = localStorage.getItem('token');
+    if (!token || !roles.includes("admin")) return;
+
+    const newSocket = io('http://127.0.0.1:5000', {
+      transports: ['polling'],
+      withCredentials: true,
+      query: { token },
+      auth: { token },
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Admin socket connected');
+      newSocket.emit('join_room', { room: 'admin_dashboard' });
+    });
+
+    // Listen for real-time updates
+    newSocket.on('transaction_created', () => {
+      console.log('Real-time: Transaction created');
+      setLastUpdate(new Date());
+      fetchDashboardData();
+      if (activeTab === 'analytics') {
+        fetchActivity();
+        fetchStatistics();
       }
-      setIsLoading(false);
+    });
+
+    newSocket.on('transaction_updated', () => {
+      console.log('Real-time: Transaction updated');
+      setLastUpdate(new Date());
+      fetchDashboardData();
+    });
+
+    newSocket.on('food_added', () => {
+      console.log('Real-time: Food added');
+      setLastUpdate(new Date());
+      fetchDashboardData();
+    });
+
+    newSocket.on('analytics_updated', (data) => {
+      console.log('Real-time: Analytics updated', data);
+      setRealtimeStats(data);
+      setLastUpdate(new Date());
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
     };
+  }, [roles, activeTab]);
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get("/api/admin/dashboard/summary");
+      if (response.success) setDashboardData(response.summary);
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 
@@ -177,10 +237,10 @@ const AdminDashboard = () => {
     else if (activeTab === "foods") fetchFoods(1);
     else if (activeTab === "requests") fetchRequests(1);
     else if (activeTab === "transactions") fetchTransactions(1);
-    else if (activeTab === "analytics") {
-      fetchStatistics();
-      fetchActivity();
-    } else if (activeTab === "health") fetchSystemHealth();
+    
+    // Always fetch analytics data for all tabs
+    fetchStatistics();
+    fetchActivity();
   }, [activeTab]);
 
   const chartData = activityData
@@ -236,13 +296,12 @@ const AdminDashboard = () => {
 
       <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-6 mb-8">
+          <TabsList className="grid w-full grid-cols-5 mb-8">
             <TabsTrigger value="overview" className="gap-2"><BarChart3 className="h-4 w-4" /><span className="hidden sm:inline">Overview</span></TabsTrigger>
             <TabsTrigger value="users" className="gap-2"><Users className="h-4 w-4" /><span className="hidden sm:inline">Users</span></TabsTrigger>
             <TabsTrigger value="foods" className="gap-2"><Package className="h-4 w-4" /><span className="hidden sm:inline">Foods</span></TabsTrigger>
             <TabsTrigger value="requests" className="gap-2"><ShoppingCart className="h-4 w-4" /><span className="hidden sm:inline">Requests</span></TabsTrigger>
             <TabsTrigger value="transactions" className="gap-2"><TrendingUp className="h-4 w-4" /><span className="hidden sm:inline">Transactions</span></TabsTrigger>
-            <TabsTrigger value="analytics" className="gap-2"><PieChartIcon className="h-4 w-4" /><span className="hidden sm:inline">Analytics</span></TabsTrigger>
           </TabsList>
 
           {/* Overview */}
@@ -347,6 +406,67 @@ const AdminDashboard = () => {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Analytics Section */}
+              <div className="mt-8">
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <BarChart3 className="h-6 w-6" />
+                  Analytics Overview
+                </h2>
+                
+                {/* Real-time Update Indicator */}
+                <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 mb-6">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Activity className="h-5 w-5 text-blue-600 animate-pulse" />
+                        <div>
+                          <p className="font-semibold text-blue-900">Real-time Analytics</p>
+                          <p className="text-sm text-blue-700">Last updated: {lastUpdate.toLocaleTimeString()}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          fetchDashboardData();
+                          fetchActivity();
+                          fetchStatistics();
+                          toast.success('Dashboard refreshed');
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Refresh
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* System Performance Radar Chart */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle>System Performance Metrics</CardTitle>
+                    <CardDescription>Multi-dimensional view of platform health</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <RadarChart data={[
+                        { metric: 'User Engagement', value: Math.min(100, (dashboardData?.users?.total || 0) * 5) },
+                        { metric: 'Food Availability', value: Math.min(100, (dashboardData?.foods?.available || 0) * 10) },
+                        { metric: 'Match Success', value: dashboardData?.transactions?.success_rate || 0 },
+                        { metric: 'Request Fulfillment', value: Math.min(100, ((dashboardData?.requests?.total || 1) - (dashboardData?.requests?.pending || 0)) / (dashboardData?.requests?.total || 1) * 100) },
+                        { metric: 'Transaction Speed', value: 85 },
+                      ]}>
+                        <PolarGrid stroke="#e5e7eb" />
+                        <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
+                        <PolarRadiusAxis angle={90} domain={[0, 100]} />
+                        <Radar name="Platform Health" dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.6} />
+                        <Tooltip />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
@@ -425,6 +545,70 @@ const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Analytics Section for Users */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <BarChart3 className="h-6 w-6" />
+                User Analytics
+              </h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Platform Activity */}
+                {chartData.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Platform Activity</CardTitle>
+                      <CardDescription>Daily activity trends</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Line type="monotone" dataKey="foods" stroke="#3b82f6" strokeWidth={2} />
+                          <Line type="monotone" dataKey="requests" stroke="#ef4444" strokeWidth={2} />
+                          <Line type="monotone" dataKey="transactions" stroke="#10b981" strokeWidth={2} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* User Distribution */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>User Distribution</CardTitle>
+                    <CardDescription>Donors vs Receivers</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie 
+                          data={[
+                            { name: 'Donors', value: dashboardData?.users?.donors || 0 },
+                            { name: 'Receivers', value: dashboardData?.users?.receivers || 0 }
+                          ]}
+                          cx="50%" 
+                          cy="50%" 
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80} 
+                          dataKey="value"
+                        >
+                          <Cell fill="#3b82f6" />
+                          <Cell fill="#10b981" />
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Foods */}
@@ -490,6 +674,43 @@ const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Analytics Section for Foods */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <BarChart3 className="h-6 w-6" />
+                Food Analytics
+              </h2>
+              
+              {foodTypeChartData.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Food Types Distribution</CardTitle>
+                    <CardDescription>Breakdown by food categories</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={350}>
+                      <PieChart>
+                        <Pie 
+                          data={foodTypeChartData} 
+                          cx="50%" 
+                          cy="50%" 
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={120} 
+                          dataKey="value"
+                        >
+                          {foodTypeChartData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
 
           {/* Requests */}
@@ -565,6 +786,39 @@ const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Analytics Section for Requests */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <BarChart3 className="h-6 w-6" />
+                Request Analytics
+              </h2>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle>Request Status Overview</CardTitle>
+                  <CardDescription>Pending vs fulfilled requests</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={[
+                      { name: 'Pending', value: dashboardData?.requests?.pending || 0, fill: '#f59e0b' },
+                      { name: 'Fulfilled', value: (dashboardData?.requests?.total || 0) - (dashboardData?.requests?.pending || 0), fill: '#10b981' },
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#8884d8" radius={[8, 8, 0, 0]}>
+                        {[0, 1].map((index) => (
+                          <Cell key={`cell-${index}`} fill={index === 0 ? '#f59e0b' : '#10b981'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Transactions */}
@@ -626,49 +880,79 @@ const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* Analytics */}
-          <TabsContent value="analytics">
-            <div className="space-y-6">
-              {chartData.length > 0 && (
+            {/* Analytics Section for Transactions */}
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <BarChart3 className="h-6 w-6" />
+                Transaction Analytics
+              </h2>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Daily Activity Trend */}
+                {chartData.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Daily Activity Trends</CardTitle>
+                      <CardDescription>Foods, requests, and transactions over time</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ComposedChart data={chartData}>
+                          <defs>
+                            <linearGradient id="colorFoods" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                            </linearGradient>
+                            <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Area type="monotone" dataKey="foods" stroke="#3b82f6" fillOpacity={1} fill="url(#colorFoods)" />
+                          <Area type="monotone" dataKey="requests" stroke="#ef4444" fillOpacity={1} fill="url(#colorRequests)" />
+                          <Bar dataKey="transactions" fill="#10b981" radius={[8, 8, 0, 0]} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Transaction Status Breakdown */}
                 <Card>
-                    <CardHeader><CardTitle>Daily Activity</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle>Transaction Status</CardTitle>
+                    <CardDescription>Current transaction states</CardDescription>
+                  </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={chartData}>
+                      <BarChart data={[
+                        { name: 'Completed', value: dashboardData?.transactions?.completed || 0, fill: '#10b981' },
+                        { name: 'In Progress', value: (dashboardData?.transactions?.total || 0) - (dashboardData?.transactions?.completed || 0), fill: '#f59e0b' },
+                      ]}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
+                        <XAxis dataKey="name" />
                         <YAxis />
                         <Tooltip />
-                        <Legend />
-                        <Line type="monotone" dataKey="foods" stroke="#3b82f6" />
-                        <Line type="monotone" dataKey="requests" stroke="#ef4444" />
-                        <Line type="monotone" dataKey="transactions" stroke="#10b981" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              )}
-              {foodTypeChartData.length > 0 && (
-                <Card>
-                  <CardHeader><CardTitle>Food Types Distribution</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={320}>
-                      <PieChart margin={{ right: 160 }}>
-                        <Pie data={foodTypeChartData} cx="40%" cy="50%" labelLine={false} outerRadius={110} dataKey="value">
-                          {foodTypeChartData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Bar dataKey="value" fill="#8884d8" radius={[8, 8, 0, 0]}>
+                          {[0, 1].map((index) => (
+                            <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#f59e0b'} />
                           ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
-              )}
+              </div>
             </div>
           </TabsContent>
+
+          {/* Remove the standalone Analytics tab - content moved to each tab */}
         </Tabs>
       </div>
     </div>

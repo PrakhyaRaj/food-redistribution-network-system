@@ -222,9 +222,6 @@ class AnalyticsService:
             socketio.emit('analytics_updated', event_data, room=f'user_{transaction.donor_id}')
             socketio.emit('analytics_updated', event_data, room=f'user_{transaction.receiver_id}')
             
-            # Broadcast to all connected clients
-            socketio.emit('analytics_updated', event_data)
-            
             print(f"✅ [ANALYTICS-SOCKET] Event emitted successfully")
             
         except Exception as e:

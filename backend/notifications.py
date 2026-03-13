@@ -15,7 +15,8 @@ from backend.mongodb import mongo_service
 from .models import db, User, FoodItem, Request, Transaction, Notification
 
 def create_notification(recipient_id, notification_type, title, message, **kwargs):
-    """Helper function to create and store a notification"""
+    """Helper function to create and store a notification in both SQL and MongoDB"""
+    notification_obj = None
     try:
         notification = Notification(
             user_id=recipient_id,
@@ -27,29 +28,34 @@ def create_notification(recipient_id, notification_type, title, message, **kwarg
         )
         db.session.add(notification)
         db.session.commit()
-        return notification
+        notification_obj = notification
+        print(f"✅ Notification created in SQL: {notification.notification_id}")
     except Exception as e:
-        print(f"Error creating notification: {e}")
+        print(f"❌ Error creating SQL notification: {e}")
         db.session.rollback()
-        # Fallback to MongoDB storage if SQL table is missing
-        try:
-            if mongo_service and getattr(mongo_service, "is_connected", lambda: False)():
-                payload = {
-                    "type": notification_type,
-                    "title": title,
-                    "message": message,
-                    **kwargs,
-                    "status": "unread",
-                    "created_at": datetime.utcnow().isoformat(),
-                }
-                mongo_id = mongo_service.store_notification(recipient_id, payload)
-                print(f"📨 Notification stored in MongoDB fallback. ID: {mongo_id}")
-                # Return a dict to mimic Notification.to_dict structure
+    
+    # ALSO store in MongoDB for the notification center UI
+    try:
+        if mongo_service and getattr(mongo_service, "is_connected", lambda: False)():
+            payload = {
+                "type": notification_type,
+                "title": title,
+                "message": message,
+                **kwargs,
+                "status": "unread",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+            mongo_id = mongo_service.store_notification(recipient_id, payload)
+            print(f"✅ Notification also stored in MongoDB: {mongo_id}")
+            
+            # If SQL failed, return MongoDB version
+            if not notification_obj:
                 payload.update({"user_id": recipient_id, "_id": str(mongo_id) if mongo_id else None})
                 return payload
-        except Exception as me:
-            print(f"❌ MongoDB notification fallback failed: {me}")
-        return None
+    except Exception as me:
+        print(f"❌ MongoDB notification storage failed: {me}")
+    
+    return notification_obj
 
 class NotificationService:
     @staticmethod
@@ -143,7 +149,9 @@ class NotificationService:
             
             # Send real-time notification
             if notification:
-                NotificationService.send_websocket_notification(donor_id, notification.to_dict())
+                # Handle both SQL model objects and MongoDB dict responses
+                notif_data = notification.to_dict() if hasattr(notification, "to_dict") else notification
+                NotificationService.send_websocket_notification(donor_id, notif_data)
             
             # Log activity
             ActivityLogger.log_food_accepted(donor_id, receiver_id, transaction_id, food_id)
@@ -192,9 +200,11 @@ class NotificationService:
                         **notification_data
                     )
                     if notification:
+                        # Handle both SQL model objects and MongoDB dict responses
+                        notif_data = notification.to_dict() if hasattr(notification, "to_dict") else notification
                         NotificationService.send_websocket_notification(
                             donor["user_id"], 
-                            notification.to_dict()
+                            notif_data
                         )
                 
                 return True
@@ -238,9 +248,11 @@ class NotificationService:
                     **notification_data
                 )
                 if notification:
+                    # Handle both SQL model objects and MongoDB dict responses
+                    notif_data = notification.to_dict() if hasattr(notification, "to_dict") else notification
                     NotificationService.send_websocket_notification(
                         user_id, 
-                        notification.to_dict()
+                        notif_data
                     )
             
             # Log activity

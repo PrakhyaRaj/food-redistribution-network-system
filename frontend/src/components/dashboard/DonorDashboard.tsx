@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, Food, Request as FoodRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, Plus, Users, TrendingUp } from "lucide-react";
+import { Package, Plus, Users, TrendingUp, Building2 } from "lucide-react";
 import { RouteOptimization } from "@/components/RouteOptimization";
 import { Link } from "react-router-dom";
 import FoodList from "@/components/food/FoodList";
@@ -271,7 +271,28 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
         </CardContent>
       </Card>
 
-      {/* ---------------------- 3. RECENT FOODS SECTION ---------------------- */}
+      {/* ---------------------- 3. MATCH WITH ORGANIZATIONS ---------------------- */}
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            Connect with Organizations
+          </CardTitle>
+          <CardDescription>
+            Match your donations with verified NGOs and organizations
+          </CardDescription>
+        </CardHeader>
+        <CardContent>5
+          <Button variant="default" size="lg" asChild className="w-full sm:w-auto">
+            <Link to="/ngo">
+              <Building2 className="h-4 w-4 mr-2" />
+              Match with Organizations
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* ---------------------- 4. RECENT FOODS SECTION ---------------------- */}
       <div>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Your Recent Food Items</h2>
@@ -288,7 +309,7 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
         <NearbyRequests requests={requests.slice(0, 4)} onMatch={loadData} />
       </div>
 
-      {/* ---------------------- 5. ROUTE OPTIMIZATION SECTION ---------------------- */}
+      {/* ---------------------- 6. ROUTE OPTIMIZATION SECTION ---------------------- */}
       {latestTransaction && (
         <div>
           <div className="flex justify-between items-center mb-4">
@@ -307,7 +328,7 @@ const DonorDashboard = ({ userId }: DonorDashboardProps) => {
       )}
 
       {/* ----------------------------------------------------------------------
-       * 6. MONGODB FEATURES (from A)
+       * 7. MONGODB FEATURES (from A)
        * ---------------------------------------------------------------------- */}
       <div className="border-t pt-10">
         <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">

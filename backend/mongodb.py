@@ -143,13 +143,17 @@ class MongoService:
             return []
     
     def get_unresolved_feedback(self):
-        """Get all unresolved feedback"""
+        """Get all unresolved feedback (or all feedback if no status field)"""
         if not self.is_connected():
             return []
             
         try:
+            # Return feedback with status pending/reviewed OR no status field (for backward compatibility)
             return list(self.db["feedback"].find(
-                {"status": {"$in": ["pending", "reviewed"]}}
+                {"$or": [
+                    {"status": {"$in": ["pending", "reviewed"]}},
+                    {"status": {"$exists": False}}
+                ]}
             ).sort("created_at", -1))
         except Exception as e:
             print(f"❌ Error getting unresolved feedback: {e}")

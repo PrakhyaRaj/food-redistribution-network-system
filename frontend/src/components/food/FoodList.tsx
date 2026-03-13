@@ -8,8 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Package, Calendar, Edit, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Package, Calendar, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { RouteOptimization } from "@/components/RouteOptimization";
@@ -24,12 +23,48 @@ interface FoodListProps {
 
 const FoodList = ({ foods, onUpdate, onSelectFood }: FoodListProps) => {
   const [foodTransactions, setFoodTransactions] = useState<Record<number, any>>({});
+  const [foodNotes, setFoodNotes] = useState<Record<number, string[]>>({});
+
+  // Load notes from MongoDB for each food item
+  useEffect(() => {
+    const loadNotes = async () => {
+      const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000";
+      for (const food of foods) {
+        try {
+          const response = await fetch(`${API_BASE}/api/notes/food/${food.id}`, {
+            headers: {
+              "Authorization": `Bearer ${localStorage.getItem("token")}`,
+            },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.notes && data.notes.length > 0) {
+              // Extract top 3 most recent notes
+              const recentNotes = data.notes
+                .slice(0, 3)
+                .map((note: any) => `${note.note_type}: ${note.content}`);
+              setFoodNotes(prev => ({
+                ...prev,
+                [food.id]: recentNotes
+              }));
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to load notes for food ${food.id}:`, err);
+        }
+      }
+    };
+
+    if (foods.length > 0) {
+      loadNotes();
+    }
+  }, [foods]);
 
   // AI-style contextual notes derived from food attributes (local heuristic, no external calls)
   const buildAutoNotes = (food: Food) => {
     const notes: string[] = [];
 
-    const name = (food.food_name || food.name || "").toLowerCase();
+    const name = (food.food_name || "").toLowerCase();
     const expiresInMs = new Date(food.expiry_date).getTime() - Date.now();
     const daysToExpiry = Math.ceil(expiresInMs / (1000 * 60 * 60 * 24));
 
@@ -155,7 +190,23 @@ const FoodList = ({ foods, onUpdate, onSelectFood }: FoodListProps) => {
               </span>
             </div>
 
-            {/* Auto-generated notes derived from the food attributes */}
+            {/* MongoDB Notes (if any) */}
+            {foodNotes[food.id] && foodNotes[food.id].length > 0 && (
+              <div className="pt-1 space-y-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Notes from MongoDB
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {foodNotes[food.id].map((note, idx) => (
+                    <Badge key={idx} variant="default" className="text-[11px]">
+                      {note}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Auto-generated notes - always show */}
             <div className="pt-1 space-y-2">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Auto Notes</div>
               <div className="flex flex-wrap gap-2">
@@ -165,7 +216,7 @@ const FoodList = ({ foods, onUpdate, onSelectFood }: FoodListProps) => {
                   </Badge>
                 ))}
                 {buildAutoNotes(food).length === 0 && (
-                  <Badge variant="secondary" className="text-[11px]">No notes</Badge>
+                  <Badge variant="secondary" className="text-[11px]">No auto notes</Badge>
                 )}
               </div>
             </div>
@@ -199,20 +250,14 @@ const FoodList = ({ foods, onUpdate, onSelectFood }: FoodListProps) => {
             )}
 
             <div className="flex gap-2 w-full">
-              <Button variant="outline" size="sm" asChild className="flex-1">
-                <Link to={`/food/edit/${food.id}`}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Link>
-              </Button>
-
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleDelete(food.id)}
-                className="text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:bg-destructive/10 flex-1"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
               </Button>
             </div>
           </CardFooter>

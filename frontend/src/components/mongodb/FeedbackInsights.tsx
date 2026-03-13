@@ -7,9 +7,15 @@ import { io, Socket } from "socket.io-client";
 interface Feedback {
   _id: string;
   user_id: string;
-  rating: number;
-  feedback_type: string;
-  content: string;
+  rating?: number;
+  metadata?: {
+    rating?: number;
+    feedback_type?: string;
+  };
+  feedback_type?: string;
+  type?: string;
+  content?: string;
+  message?: string;
   created_at: string;
 }
 
@@ -84,12 +90,12 @@ export const FeedbackInsights: React.FC<{ reloadSignal?: boolean }> = ({ reloadS
         const totalFeedback = feedbackList.length;
         const averageRating =
           totalFeedback > 0
-            ? feedbackList.reduce((sum, f) => sum + (f.rating || 0), 0) / totalFeedback
+            ? feedbackList.reduce((sum, f) => sum + (f.metadata?.rating || f.rating || 0), 0) / totalFeedback
             : 0;
 
         const typeBreakdown: Record<string, number> = {};
         feedbackList.forEach((f) => {
-          const key = f.feedback_type || f.type || "unknown";
+          const key = f.metadata?.feedback_type || f.feedback_type || f.type || "unknown";
           typeBreakdown[key] = (typeBreakdown[key] || 0) + 1;
         });
 
@@ -174,12 +180,12 @@ export const FeedbackInsights: React.FC<{ reloadSignal?: boolean }> = ({ reloadS
                 {feedbacks.slice(0, 5).map((f) => (
                   <div key={f._id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <div className="flex items-start justify-between mb-2">
-                      <Badge className={getFeedbackTypeColor(f.feedback_type)}>
-                        {f.feedback_type}
+                      <Badge className={getFeedbackTypeColor(f.metadata?.feedback_type || f.feedback_type || 'general')}>
+                        {f.metadata?.feedback_type || f.feedback_type || 'general'}
                       </Badge>
-                      <div>{renderStars(f.rating)}</div>
+                      <div>{renderStars(f.metadata?.rating || f.rating || 0)}</div>
                     </div>
-                    <p className="text-sm text-gray-700">{f.content}</p>
+                    <p className="text-sm text-gray-700">{f.message || f.content}</p>
                     <p className="text-xs text-gray-500 mt-2">
                       {new Date(f.created_at).toLocaleDateString()}
                     </p>

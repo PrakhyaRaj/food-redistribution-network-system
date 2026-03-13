@@ -54,7 +54,7 @@ def add_request():
             "status": new_request.status,
             "created_at": new_request.created_at.strftime("%Y-%m-%d %H:%M:%S")
         }
-        socketio.emit('request_created', request_data)
+        # Targeted notification sent via NotificationService.notify_new_request() instead
 
         return jsonify({
             "success": True,

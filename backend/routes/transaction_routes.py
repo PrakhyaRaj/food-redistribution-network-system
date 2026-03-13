@@ -236,7 +236,6 @@ def create_transaction():
     # Also emit Socket.IO events
     socketio.emit('transaction_created', transaction_data, room=f'user_{data["donor_id"]}')
     socketio.emit('transaction_created', transaction_data, room=f'user_{data["receiver_id"]}')
-    socketio.emit('transaction_created', transaction_data)
     
     # Log redistribution analytics
     try:
@@ -456,8 +455,6 @@ def update_transaction_status(txn_id):
     transaction_data = format_transaction_response(txn)
     socketio.emit('transaction_updated', transaction_data, room=f'user_{txn.donor_id}')
     socketio.emit('transaction_updated', transaction_data, room=f'user_{txn.receiver_id}')
-    # Broadcast to all connected clients
-    socketio.emit('transaction_updated', transaction_data)
 
     return jsonify({
         "message": "Transaction status updated",

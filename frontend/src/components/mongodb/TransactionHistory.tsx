@@ -2,7 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Calendar, User, Package, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { MongoDBCard } from './MongoDBCard';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Transaction {
   _id: string;
@@ -28,6 +30,8 @@ const getHeaders = () => {
 };
 
 export const TransactionHistory: React.FC = () => {
+  const { user } = useAuth();
+  const userId = user?.user_id?.toString() || localStorage.getItem("user_id");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -95,6 +99,48 @@ export const TransactionHistory: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleMarkDelivered = async (txnId: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/transactions/update/${txnId}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: 'delivered' })
+      });
+
+      if (response.ok) {
+        await loadTransactions();
+        alert('Transaction marked as delivered!');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to update transaction');
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      alert('Error updating transaction');
+    }
+  };
+
+  const handleMarkReceived = async (txnId: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/transactions/update/${txnId}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: 'received' })
+      });
+
+      if (response.ok) {
+        await loadTransactions();
+        alert('Transaction marked as received!');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to update transaction');
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      alert('Error updating transaction');
+    }
   };
 
   return (
@@ -225,6 +271,28 @@ export const TransactionHistory: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Action Buttons */}
+              <div className="mt-3 flex gap-2">
+                {txn.donor_id === parseInt(userId!) && txn.status === "initiated" && (
+                  <Button 
+                    onClick={() => handleMarkDelivered(txn.txn_id)}
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Mark as Delivered
+                  </Button>
+                )}
+                {txn.receiver_id === parseInt(userId!) && txn.status === "in_progress" && (
+                  <Button 
+                    onClick={() => handleMarkReceived(txn.txn_id)}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Mark as Received
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -36,31 +36,20 @@ class GeoService:
         # 2. Calculate from PostgreSQL database
         nearby_users = []
         
-        with db.session.begin():
-            all_users = User.query.all()
-            
-            for user in all_users:
-                if user.location_lat and user.location_long:
-                    distance = GeoService.haversine_distance(
-                        lat, lng, user.location_lat, user.location_long
-                    )
+        all_users = User.query.all()
+        
+        for user in all_users:
+            if user.location_lat and user.location_long:
+                distance = GeoService.haversine_distance(
+                    lat, lng, user.location_lat, user.location_long
+                )
+                
+                if distance <= radius_km:
+                    user_roles = [r.role_name for r in user.roles]
                     
-                    if distance <= radius_km:
-                        user_roles = [r.role_name for r in user.roles]
-                        
-                        # Filter by user_type if specified
-                        if user_type:
-                            if user_type in user_roles:
-                                nearby_users.append({
-                                    "user_id": user.user_id,
-                                    "name": user.name,
-                                    "email": user.email,
-                                    "roles": user_roles,
-                                    "distance_km": round(distance, 2),
-                                    "lat": user.location_lat,
-                                    "lng": user.location_long
-                                })
-                        else:
+                    # Filter by user_type if specified
+                    if user_type:
+                        if user_type in user_roles:
                             nearby_users.append({
                                 "user_id": user.user_id,
                                 "name": user.name,
@@ -70,6 +59,16 @@ class GeoService:
                                 "lat": user.location_lat,
                                 "lng": user.location_long
                             })
+                    else:
+                        nearby_users.append({
+                            "user_id": user.user_id,
+                            "name": user.name,
+                            "email": user.email,
+                            "roles": user_roles,
+                            "distance_km": round(distance, 2),
+                            "lat": user.location_lat,
+                            "lng": user.location_long
+                        })
         
         # 3. Cache the result if we found users
         if nearby_users:

@@ -115,12 +115,34 @@ const Transactions = () => {
     switch (status) {
       case "completed":
         return "default";
+      case "in_progress":
+        return "secondary";
       case "pending":
         return "secondary";
       case "cancelled":
         return "outline";
       default:
         return "secondary";
+    }
+  };
+
+  const handleMarkDelivered = async (txnId: number) => {
+    try {
+      await api.transactions.markDelivered(txnId);
+      toast.success("Transaction marked as delivered!");
+      loadTransactions();
+    } catch (error) {
+      toast.error("Failed to mark as delivered");
+    }
+  };
+
+  const handleMarkReceived = async (txnId: number) => {
+    try {
+      await api.transactions.markReceived(txnId);
+      toast.success("Transaction completed!");
+      loadTransactions();
+    } catch (error) {
+      toast.error("Failed to mark as received");
     }
   };
 
@@ -196,6 +218,32 @@ const Transactions = () => {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Action Buttons */}
+                  {txn.status !== "completed" && txn.status !== "cancelled" && (
+                    <div className="flex gap-2 mt-4">
+                      {/* Donor can mark as delivered when status is initiated */}
+                      {txn.donor_id === parseInt(userId!) && txn.status === "initiated" && (
+                        <Button
+                          onClick={() => handleMarkDelivered(txn.txn_id)}
+                          variant="default"
+                          size="sm"
+                        >
+                          Mark as Delivered
+                        </Button>
+                      )}
+                      {/* Receiver can mark as received when status is in_progress */}
+                      {txn.receiver_id === parseInt(userId!) && txn.status === "in_progress" && (
+                        <Button
+                          onClick={() => handleMarkReceived(txn.txn_id)}
+                          variant="default"
+                          size="sm"
+                        >
+                          Mark as Received
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   
                   {/* Route Optimization Component */}
                   <div className="mt-4 pt-4 border-t">

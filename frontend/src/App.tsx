@@ -19,6 +19,7 @@ import NotificationHandler from "@/components/NotificationHandler";
 import RequestDetail from "./pages/RequestDetail";
 import { TransactionHistory } from "@/components/mongodb/TransactionHistory";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
+import NGOPage from "./pages/NGOPage";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +81,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <TransactionHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ngo"
+              element={
+                <ProtectedRoute>
+                  <NGOPage />
                 </ProtectedRoute>
               }
             />

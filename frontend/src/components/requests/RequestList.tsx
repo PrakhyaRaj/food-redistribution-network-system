@@ -2,7 +2,7 @@ import { Request as FoodRequest } from "@/lib/api";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { HandHeart, Calendar, Package, Edit, X } from "lucide-react";
+import { HandHeart, Calendar, Package, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -77,20 +77,15 @@ const RequestList = ({ requests, onUpdate }: RequestListProps) => {
             </div>
           </CardContent>
           {request.status === "pending" && (
-            <CardFooter className="flex gap-2">
-              <Button variant="outline" size="sm" asChild className="flex-1">
-                <Link to={`/requests/edit/${request.id}`}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Link>
-              </Button>
+            <CardFooter className="flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleCancel(request.id)}
                 className="text-destructive hover:bg-destructive/10"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4 mr-2" />
+                Cancel
               </Button>
             </CardFooter>
           )}
